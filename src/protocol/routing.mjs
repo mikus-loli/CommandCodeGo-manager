@@ -19,6 +19,17 @@
 // 便于单测与「同一请求内多次轮转」复用。
 export const WINDOW_MS = { fiveHour: 5 * 3600_000, weekly: 7 * 86400_000 };
 
+// 用量快照的保质期:超过这个年龄就不拿它当判断依据。上游计费接口连续失败时,
+// 三天前的「这个账号还很宽裕」不能继续指挥流量 —— 过期后退回「没有数据」,
+// 由 LRU 分摊 + 429 轮转兜底。
+export const SNAPSHOT_TTL_MS = 30 * 60_000;
+
+/** 快照是否还能当判断依据(fetchedAt 缺失/为 0 视为不可用)。 */
+export function isSnapshotFresh(fetchedAt, now = Date.now()) {
+  const at = Number(fetchedAt) || 0;
+  return at > 0 && now - at <= SNAPSHOT_TTL_MS;
+}
+
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
 /**

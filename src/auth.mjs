@@ -10,7 +10,7 @@ import {
   findUpstreamKeyByApiKey, getPinnedUpstreamKeyId,
 } from './store/keys.mjs';
 import { isWindowBlocked } from './protocol/window-state.mjs';
-import { rankAccounts, normalizeRoutingMode } from './protocol/routing.mjs';
+import { rankAccounts, accountHeadroom, normalizeRoutingMode } from './protocol/routing.mjs';
 import { accountUsageData } from './protocol/account-usage.mjs';
 
 function getApiKey(headers) {
@@ -64,6 +64,20 @@ export async function selectUpstreamKey(preferredId, options = {}) {
   }
   if (normalizeRoutingMode(CFG.routingMode) === 'balanced') {
     const candidates = (await listUpstreamKeys()).filter(k => k.status === 'active' && eligible(k));
+    // 绑定亲和(可选):多租户各自绑定账号时,绑定账号健康就优先用它,免得把别人的流量
+    // 摊到自己头上。只有「有用量数据且没到预留水位」才算健康 —— 没数据时无从判断,
+    // 直接走均衡(否则关掉用量刷新就退化成旧的顺序行为)。
+    if (CFG.routingAffinity && preferredId != null) {
+      const bound = candidates.find(k => k.id === preferredId);
+      if (bound) {
+        const head = accountHeadroom(
+          accountUsageData(bound.id), Date.now(), (Number(CFG.routingReservePct) || 0) / 100);
+        if (head.known && !head.atRisk) {
+          const full = await getUpstreamKeyById(bound.id);
+          if (eligible(full)) return full;
+        }
+      }
+    }
     if (candidates.length) {
       const ranked = rankAccounts(
         candidates.map(k => ({ id: k.id, lastUsedAt: k.last_used_at, data: accountUsageData(k.id) })),

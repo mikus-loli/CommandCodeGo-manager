@@ -12,7 +12,7 @@ import { CC_VERSION } from './upstream.mjs';
 import { slugifyProjectPath, DEVICE_PROFILE } from './fingerprint.mjs';
 import { listUpstreamKeys, getUpstreamKeyById, renameUpstreamKey, getPinnedUpstreamKeyId, setPinnedUpstreamKeyId } from '../store/keys.mjs';
 import { syncFromWindowLimits, getWindowState } from './window-state.mjs';
-import { accountHeadroom, normalizeRoutingMode } from './routing.mjs';
+import { accountHeadroom, isSnapshotFresh, normalizeRoutingMode } from './routing.mjs';
 import { getDb } from '../store/db.mjs';
 
 // 账户展示名:commandcode 账户名(userName)优先,退回邮箱前缀,再退回通用默认。
@@ -174,15 +174,18 @@ function loadSnapshot(keyId) {
 /**
  * 某账号的最近用量快照(纯读:内存缓存 → 落库快照),供调度器算余量。
  * 绝不触达上游 —— 选择路径上不能引入网络等待。
+ * now 可注入,便于测试过期语义。
  */
-export function accountUsageData(keyId) {
+export function accountUsageData(keyId, now = Date.now()) {
   const entry = cache.get(keyId);
-  if (entry) return entry.data ?? null;
+  if (entry) return isSnapshotFresh(entry.fetchedAt, now) ? entry.data ?? null : null;
   const persisted = loadSnapshot(keyId);
   if (!persisted) return null;
   cache.set(keyId, { data: persisted.data, error: null, fetchedAt: persisted.fetchedAt });
-  return persisted.data;
+  return isSnapshotFresh(persisted.fetchedAt, now) ? persisted.data : null;
 }
+
+
 // 进行中的刷新去重:同一账号并发点刷新只发一串上游请求
 const inflight = new Map();
 

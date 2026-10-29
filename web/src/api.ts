@@ -102,6 +102,7 @@ export interface Settings {
   routingMode?: 'balanced' | 'sticky';
   routingReservePct?: number;    // 预留水位:余量低于该百分比即视为「将满」
   routingHysteresisPct?: number; // 滞留带:与最宽裕账号差多少以内继续用上一个
+  routingAffinity?: boolean;     // 按客户端绑定亲和:绑定账号健康时优先用它(多租户各用各的)
   emptySystemPlaceholder?: boolean; dataDir?: string;
   /** 被环境变量固定的键(容器部署的 HOST/PORT 等):改配置文件不生效,UI 应禁改 */
   envPinned?: string[];

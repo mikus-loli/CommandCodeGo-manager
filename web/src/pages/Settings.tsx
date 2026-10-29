@@ -24,6 +24,7 @@ interface FormState {
   allowDirectUpstreamKey: boolean;
   routingMode: 'balanced' | 'sticky';
   routingReservePct: string; routingHysteresisPct: string;
+  routingAffinity: boolean;
 }
 
 // 开关:Button variant 切换样式自实现
@@ -92,6 +93,7 @@ export function Settings() {
           routingMode: s.routingMode === 'sticky' ? 'sticky' : 'balanced',
           routingReservePct: s.routingReservePct != null ? String(s.routingReservePct) : '15',
           routingHysteresisPct: s.routingHysteresisPct != null ? String(s.routingHysteresisPct) : '10',
+          routingAffinity: !!s.routingAffinity,
         });
       } catch (e) {
         if (alive) {
@@ -147,6 +149,7 @@ export function Settings() {
         routingMode: form.routingMode,
         routingReservePct: Number(form.routingReservePct.trim()),
         routingHysteresisPct: Number(form.routingHysteresisPct.trim()),
+        routingAffinity: form.routingAffinity,
       };
       if (form.host.trim()) patch.host = form.host.trim();
       if (form.apiBase.trim()) patch.apiBase = form.apiBase.trim();
@@ -270,6 +273,9 @@ export function Settings() {
                 {fieldErr('routingHysteresisPct')}
               </Field>
             </div>
+            <ToggleRow title="按客户端绑定亲和"
+              hint="开:客户端绑定的账号健康时优先用它,掉到预留水位以下才参与均衡(多租户各用各的账号时开);关:所有客户端共用同一套均衡"
+              on={form.routingAffinity} onChange={v => set('routingAffinity', v)} />
             <div className="text-xs text-txt3">
               均衡模式依赖账号用量快照:
               {Number(form.accountUsageRefreshMs) > 0

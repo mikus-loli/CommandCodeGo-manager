@@ -36,6 +36,9 @@ export function defaults() {
     routingMode: 'balanced',
     routingReservePct: 15,        // 预留比例:某窗口剩余低于该百分比即视为「将满」,优先让位给更宽裕的账号
     routingHysteresisPct: 10,     // 滞留带:上一个账号的用量比最省的账号多出不足该百分点时继续用它(保住上游缓存)
+    // 按客户端绑定亲和(默认关):开则「客户端密钥绑定的账号」健康时优先用它,
+    // 只有它掉到预留水位以下才参与均衡 —— 多租户各用各的账号时开这个。
+    routingAffinity: false,
     zdr: false,
     cliMode: 'agent', // 信封 mode。服务端枚举（真机 400 报出来的）：agent|learning|custom-agent|custom-agent-create|title-gen|tool-desc|compact|vision
     cliSessionMode: 'interactive', // lifecycle metadata 的 mode —— 注意这是另一个枚举：interactive | non-interactive
@@ -79,6 +82,7 @@ function applyEnvOverrides(cfg) {
   if (process.env.CC_CLI_SESSION_MODE) cfg.cliSessionMode = process.env.CC_CLI_SESSION_MODE;
   if (process.env.CC_EMPTY_SYSTEM_PLACEHOLDER) cfg.emptySystemPlaceholder = process.env.CC_EMPTY_SYSTEM_PLACEHOLDER !== 'false';
   if (process.env.CC_ROUTING_MODE) cfg.routingMode = process.env.CC_ROUTING_MODE;
+  if (process.env.CC_ROUTING_AFFINITY !== undefined) cfg.routingAffinity = process.env.CC_ROUTING_AFFINITY === 'true';
   return cfg;
 }
 
@@ -114,7 +118,7 @@ const ENV_KEYS = {
   fingerprintSalt: 'CC_FINGERPRINT_SALT', deviceProjectDir: 'CC_DEVICE_PROJECT_DIR',
   cliMode: 'CC_CLI_MODE', cliSessionMode: 'CC_CLI_SESSION_MODE',
   emptySystemPlaceholder: 'CC_EMPTY_SYSTEM_PLACEHOLDER',
-  routingMode: 'CC_ROUTING_MODE',
+  routingMode: 'CC_ROUTING_MODE', routingAffinity: 'CC_ROUTING_AFFINITY',
 };
 
 /** 当前被环境变量覆写的配置键列表(这些键改配置文件不会生效)。 */
