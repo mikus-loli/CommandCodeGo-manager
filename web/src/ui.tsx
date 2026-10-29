@@ -83,7 +83,7 @@ export function Button({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; size?: 'sm' | 'md'; loading?: boolean }) {
   const base = 'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.97] active:brightness-95';
   // 移动端触控目标 ≥36px(sm)/40px(md),桌面回到紧凑尺寸
-  const sizes = { sm: 'h-8 px-3 text-xs md:h-7 md:px-2.5', md: 'h-10 px-4 text-sm md:h-9 md:px-3.5' };
+  const sizes = { sm: 'h-9 px-3 text-xs md:h-7 md:px-2.5', md: 'h-10 px-4 text-sm md:h-9 md:px-3.5' };
   const variants: Record<BtnVariant, string> = {
     primary: 'brand-gradient text-white hover:brightness-110 font-semibold shadow-sm',
     default: 'bg-panel text-txt border border-line hover:border-line2 hover:bg-panel2',

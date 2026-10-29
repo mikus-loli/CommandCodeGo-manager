@@ -78,7 +78,7 @@ const LogRow = memo(function LogRow({ r, expanded, onToggle }: {
           <span className="hidden md:inline">{fmtTime(r.ts)}</span>
           <span className="md:hidden">{fmtTimeShort(r.ts)}</span>
         </Td>
-        <Td className="max-w-40 truncate font-mono text-xs md:max-w-44">{r.endpoint || '—'}</Td>
+        <Td className="max-w-32 truncate font-mono text-xs md:max-w-44">{r.endpoint || '—'}</Td>
         <Td className="hidden max-w-32 truncate text-xs text-txt2 md:table-cell">{r.proxy_key ?? '—'}</Td>
         <Td className="hidden max-w-36 truncate text-xs md:table-cell">{r.model ?? '—'}</Td>
         <Td><Badge kind={statusKind(r.status_code)}>{r.status_code ?? '—'}</Badge></Td>

@@ -1,5 +1,5 @@
 // 用量统计(Phase 3.3):范围选择 + 每日柱线图 + 模型 token 堆叠图 + 按模型/key 下钻明细表。
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Activity, Coins, Database, Zap } from 'lucide-react';
 import { fetchUsage, type UsageRow } from '../api';
 import {
@@ -30,18 +30,33 @@ type SortDir = 'asc' | 'desc';
 
 // 可排序表头(Th 不透传 onClick,内嵌按钮)
 function SortTh({ label, k, sortKey, sortDir, onSort, className = '' }: {
-  label: string; k: SortKey; sortKey: SortKey; sortDir: SortDir;
+  label: ReactNode; k: SortKey; sortKey: SortKey; sortDir: SortDir;
   onSort: (k: SortKey) => void; className?: string;
 }) {
   const active = k === sortKey;
   return (
     <Th className={className}>
-      <button onClick={() => onSort(k)} className={`inline-flex min-h-[24px] items-center gap-1 transition-colors ${active ? 'text-accent' : 'hover:text-txt'}`}>
+      <button onClick={() => onSort(k)} className={`inline-flex min-h-9 items-center gap-1 px-1 -mx-1 transition-colors md:min-h-[24px] md:px-0 md:mx-0 ${active ? 'text-accent' : 'hover:text-txt'}`}>
         {label}
         <span className="text-[9px] leading-none">{active ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
       </button>
     </Th>
   );
+}
+
+
+// 窄屏图表分类标签:去掉厂商前缀与日期尾巴,过长时按 "-" 折成两行,保证 10 个模型可区分。
+function narrowModelLabel(name: string): string {
+  const s = name.replace(/^[^/]+\//, '').replace(/-20\d{6}$/, '');
+  if (s.length <= 10) return s;
+  const parts = s.split('-');
+  const line1: string[] = [];
+  let i = 0;
+  while (i < parts.length && line1.join('-').length + parts[i].length + (line1.length ? 1 : 0) <= 9) line1.push(parts[i++]);
+  const line2 = parts.slice(i);
+  if (!line1.length) return s.slice(0, 9) + '…';
+  const l2 = line2.join('-');
+  return l2 ? `${line1.join('-')}\n${l2.length > 10 ? l2.slice(0, 9) + '…' : l2}` : line1.join('-');
 }
 
 export function Usage() {
@@ -125,17 +140,17 @@ export function Usage() {
     return {
       ...base,
       // 手机上省掉右轴刻度,把宽度让给绘图区(tokens 走 tooltip)
-      grid: { ...base.grid, top: narrow ? 52 : 56, right: narrow ? 10 : 64 },
+      grid: { ...base.grid, top: narrow ? 52 : 56, right: narrow ? 22 : 64 },
       legend: { data: ['请求数', '输入 tokens', '输出 tokens'], top: 4, right: narrow ? 4 : 8, itemWidth: narrow ? 10 : 14, itemGap: narrow ? 8 : 10, textStyle: { color: C.txt2, fontSize: narrow ? 10 : 12 } },
       xAxis: {
         type: 'category', data: labels,
         axisLine: { lineStyle: { color: C.line2 } }, axisTick: { show: false },
-        axisLabel: { color: C.txt2, fontSize: 11 },
+        axisLabel: { color: C.txt2, fontSize: 11, hideOverlap: true },
       },
       yAxis: [
         {
           type: 'value',
-          axisLabel: { color: C.txt2, fontSize: 11 }, splitLine: { lineStyle: { color: C.line } },
+          axisLabel: { color: C.txt2, fontSize: 11, formatter: (v: number) => fmtK(v) }, splitLine: { lineStyle: { color: C.line } },
         },
         {
           type: 'value',
@@ -174,16 +189,22 @@ export function Usage() {
     return {
       ...base,
       // 窄屏把左侧模型名列从 150px 收到 96px,并截断超长模型名
-      grid: { ...base.grid, top: narrow ? 46 : 52, left: narrow ? 96 : 150 },
+      grid: { ...base.grid, top: narrow ? 46 : 52, left: narrow ? 92 : 150, right: narrow ? 16 : 16 },
       legend: { data: ['输入', '缓存', '输出'], top: 4, right: narrow ? 4 : 8, itemWidth: narrow ? 10 : 14, itemGap: narrow ? 8 : 10, textStyle: { color: C.txt2, fontSize: narrow ? 10 : 12 } },
       xAxis: {
         type: 'value',
-        axisLabel: { color: C.txt2, fontSize: 11 }, splitLine: { lineStyle: { color: C.line } },
+        axisLabel: { color: C.txt2, fontSize: 11, formatter: (v: number) => fmtK(v) },
+        splitLine: { lineStyle: { color: C.line } }, splitNumber: narrow ? 2 : 5,
       },
       yAxis: {
         type: 'category', inverse: true, data: top.map(r => r.model ?? 'unknown'),
         axisLine: { lineStyle: { color: C.line2 } }, axisTick: { show: false },
-        axisLabel: { color: C.txt2, fontSize: narrow ? 10 : 11, width: narrow ? 84 : 140, overflow: 'truncate' },
+        axisLabel: {
+          color: C.txt2, fontSize: narrow ? 10 : 11, width: narrow ? 80 : 140, overflow: 'truncate',
+          // 窄屏去掉厂商前缀与日期尾巴,单位宽度能显示的信息更多
+          formatter: narrow ? narrowModelLabel : undefined,
+          lineHeight: narrow ? 11 : 14,
+        },
       },
       series: [
         { name: '输入', type: 'bar', stack: 'tokens', data: top.map(r => r.input_tokens ?? 0), itemStyle: { color: C.accent }, barMaxWidth: 14 },
@@ -291,11 +312,11 @@ export function Usage() {
             <thead>
               <tr>
                 <SortTh label={tab === 'model' ? '模型' : 'Key'} k="dim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortTh label="请求数" k="requests" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
-                <SortTh label="输入 tokens" k="input_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
-                <SortTh label="缓存 tokens" k="cached_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden text-right md:table-cell" />
-                <SortTh label="输出 tokens" k="output_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden text-right md:table-cell" />
-                <SortTh label="合计 tokens" k="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                <SortTh label={<>请求<span className="hidden md:inline">数</span></>} k="requests" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                <SortTh label={<>输入<span className="hidden md:inline"> tokens</span></>} k="input_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                <SortTh label={<>缓存<span className="hidden md:inline"> tokens</span></>} k="cached_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden text-right md:table-cell" />
+                <SortTh label={<>输出<span className="hidden md:inline"> tokens</span></>} k="output_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden text-right md:table-cell" />
+                <SortTh label={<>合计<span className="hidden md:inline"> tokens</span></>} k="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
               </tr>
             </thead>
             <tbody>
