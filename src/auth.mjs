@@ -10,6 +10,8 @@ import {
   findUpstreamKeyByApiKey, getPinnedUpstreamKeyId,
 } from './store/keys.mjs';
 import { isWindowBlocked } from './protocol/window-state.mjs';
+import { rankAccounts, normalizeRoutingMode } from './protocol/routing.mjs';
+import { accountUsageData } from './protocol/account-usage.mjs';
 
 function getApiKey(headers) {
   // Try Authorization: Bearer header (OpenAI SDK style)
@@ -39,9 +41,17 @@ export function authErrorMessage(error) {
 }
 
 /**
- * 选择未受限的启用账号。优先级:管理界面固定(「切到此账号」)> 密钥绑定 > 列表顺序。
- * 固定是偏好不是硬性:固定账号不可用(停用/耗尽/窗口受限/轮转已试过)时按后续
- * 优先级兜底,恢复后自动回到固定账号。排除整个重试链。
+ * 选择未受限的启用账号。
+ *
+ * 优先级:**管理界面固定(「切到此账号」)> 调度模式 > 密钥绑定 > 列表顺序**。
+ * 固定是明确的用户意图,两种模式下都优先;它不可用(停用/耗尽/窗口受限/轮转已试过)
+ * 时按后续规则兜底,恢复后自动回到固定账号。排除整个重试链。
+ *
+ * 调度模式(CFG.routingMode):
+ *   balanced(默认)—— 在所有启用账号间按均衡规则选(auth 之外唯一的判据):
+ *                    健康账号 LRU 分摊,快撞顶的账号降级为备选(见 protocol/routing.mjs)。
+ *                    密钥绑定不再是硬约束:多账号就是用来并行分摊的。
+ *   sticky        —— 旧行为:绑定账号一路用到耗尽,再按列表顺序换下一个。
  */
 export async function selectUpstreamKey(preferredId, options = {}) {
   const skip = new Set(options.skipUpstreamIds ?? []);
@@ -51,6 +61,19 @@ export async function selectUpstreamKey(preferredId, options = {}) {
   if (pinnedId != null) {
     const pinned = await getUpstreamKeyById(pinnedId);
     if (eligible(pinned)) return pinned;
+  }
+  if (normalizeRoutingMode(CFG.routingMode) === 'balanced') {
+    const candidates = (await listUpstreamKeys()).filter(k => k.status === 'active' && eligible(k));
+    if (candidates.length) {
+      const ranked = rankAccounts(
+        candidates.map(k => ({ id: k.id, lastUsedAt: k.last_used_at, data: accountUsageData(k.id) })),
+        { reservePct: CFG.routingReservePct, hysteresisPct: CFG.routingHysteresisPct },
+      );
+      for (const pick of ranked) {
+        const full = await getUpstreamKeyById(pick.id);
+        if (eligible(full)) return full;
+      }
+    }
   }
   const preferred = await getUpstreamKeyById(preferredId);
   if (eligible(preferred)) return preferred;

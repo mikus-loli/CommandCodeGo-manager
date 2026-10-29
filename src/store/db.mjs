@@ -59,6 +59,11 @@ CREATE TABLE IF NOT EXISTS usage_daily (
   requests INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, key_id, model)
 );
+CREATE TABLE IF NOT EXISTS account_usage_snapshot (
+  key_id INTEGER PRIMARY KEY,
+  fetched_at INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

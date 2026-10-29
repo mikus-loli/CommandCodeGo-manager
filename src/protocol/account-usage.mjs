@@ -12,6 +12,8 @@ import { CC_VERSION } from './upstream.mjs';
 import { slugifyProjectPath, DEVICE_PROFILE } from './fingerprint.mjs';
 import { listUpstreamKeys, getUpstreamKeyById, renameUpstreamKey, getPinnedUpstreamKeyId, setPinnedUpstreamKeyId } from '../store/keys.mjs';
 import { syncFromWindowLimits, getWindowState } from './window-state.mjs';
+import { accountHeadroom, normalizeRoutingMode } from './routing.mjs';
+import { getDb } from '../store/db.mjs';
 
 // 账户展示名:commandcode 账户名(userName)优先,退回邮箱前缀,再退回通用默认。
 // 导入与存量迁移都用它命名上游 key,避免一排「CommandCode CLI 登录」分不清谁是谁。
@@ -143,15 +145,57 @@ async function fetchAccountUsage(apiKey) {
 // ── 缓存与刷新编排 ─────────────────────────────────────────
 // id → { data, error, fetchedAt }。进程内缓存,重启即空,靠手动刷新回填。
 const cache = new Map();
+
+// 用量快照落库:进程重启后均衡模式仍能知道「谁的窗口快满了」,
+// 否则重启后第一波请求会把已到顶的账号再打一遍(拿 429 再轮转)。
+function persistSnapshot(keyId, data) {
+  if (!data) return;
+  const db = getDb();
+  if (!db) return;
+  try {
+    db.prepare('INSERT INTO account_usage_snapshot (key_id, fetched_at, data) VALUES (?, ?, ?) '
+      + 'ON CONFLICT(key_id) DO UPDATE SET fetched_at = excluded.fetched_at, data = excluded.data')
+      .run(keyId, Date.now(), JSON.stringify(data));
+  } catch (e) {
+    log('warn', 'Account usage snapshot persist failed', { keyId, error: e.message });
+  }
+}
+
+function loadSnapshot(keyId) {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    const row = db.prepare('SELECT fetched_at, data FROM account_usage_snapshot WHERE key_id = ?').get(keyId);
+    if (!row) return null;
+    return { fetchedAt: row.fetched_at, data: JSON.parse(row.data) };
+  } catch { return null; }
+}
+
+/**
+ * 某账号的最近用量快照(纯读:内存缓存 → 落库快照),供调度器算余量。
+ * 绝不触达上游 —— 选择路径上不能引入网络等待。
+ */
+export function accountUsageData(keyId) {
+  const entry = cache.get(keyId);
+  if (entry) return entry.data ?? null;
+  const persisted = loadSnapshot(keyId);
+  if (!persisted) return null;
+  cache.set(keyId, { data: persisted.data, error: null, fetchedAt: persisted.fetchedAt });
+  return persisted.data;
+}
 // 进行中的刷新去重:同一账号并发点刷新只发一串上游请求
 const inflight = new Map();
 
 function rowOf(key, entry, pinnedId) {
+  const head = accountHeadroom(entry?.data ?? null, Date.now(),
+    (Number(CFG.routingReservePct) || 0) / 100);
   return {
     id: key.id, name: key.name, status: key.status,
     fetchedAt: entry?.fetchedAt ?? null,
     error: entry?.error ?? null,
     data: entry?.data ?? null,
+    // 调度视角的余量(均衡模式据此让位):frac 为最紧窗口的剩余比例,known=false 表示无数据
+    headroom: { known: head.known, frac: head.frac, atRisk: head.atRisk, window: head.window, until: head.until },
     // 是否为「切到此账号」固定的承接账号(路由优先级最高,见 auth.mjs)
     pinned: key.id === pinnedId,
     // 运行时窗口状态(轮转的依据):live=请求侧 429 标记,usage=刷新同步
@@ -173,6 +217,7 @@ async function refreshKey(key) {
       log('warn', 'Account usage refresh failed', { keyId: key.id, error: e.message });
     }
     cache.set(key.id, entry);
+    persistSnapshot(key.id, entry.data);
     // 窗口状态与用量数据同步:到顶 → 标记到 resetAt;已释放 → 清除(live 标记随之收敛)
     syncFromWindowLimits(key.id, entry.data?.windowLimits ?? null);
     // 默认名迁移:导入时未取到账户名的 key,拿到 whoami 后按 commandcode 账户名重命名
@@ -200,7 +245,19 @@ async function refreshKey(key) {
 export async function accountUsageSnapshot() {
   const keys = await listUpstreamKeys();
   const pinnedId = await getPinnedUpstreamKeyId();
-  return { rows: keys.map(k => rowOf(k, cache.get(k.id), pinnedId)) };
+  // 落库快照与内存缓存同源:只刷过别人没刷过的账号(重启后)也能参与调度
+  for (const k of keys) if (!cache.has(k.id)) {
+    const persisted = loadSnapshot(k.id);
+    if (persisted) cache.set(k.id, { data: persisted.data, error: null, fetchedAt: persisted.fetchedAt });
+  }
+  return {
+    rows: keys.map(k => rowOf(k, cache.get(k.id), pinnedId)),
+    routing: {
+      mode: normalizeRoutingMode(CFG.routingMode),
+      reservePct: Number(CFG.routingReservePct) || 0,
+      pinned: pinnedId,
+    },
+  };
 }
 
 /**
@@ -255,8 +312,11 @@ export async function pinAccount(id) {
     await setPinnedUpstreamKeyId(null);
     log('info', 'Account pin cleared');
   }
-  const { rows } = await accountUsageSnapshot();
-  return { rows, pinned: id != null ? (rows.find(r => r.id === id) ? { id, name: rows.find(r => r.id === id).name } : null) : null };
+  const { rows, routing } = await accountUsageSnapshot();
+  return {
+    rows, routing,
+    pinned: id != null ? (rows.find(r => r.id === id) ? { id, name: rows.find(r => r.id === id).name } : null) : null,
+  };
 }
 
 // ── 自动定时刷新 ───────────────────────────────────────────

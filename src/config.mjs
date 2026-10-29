@@ -31,6 +31,11 @@ export function defaults() {
     useProviderModels: true,
     modelRefreshIntervalMs: 5 * 60 * 1000,  // 5 minutes
     accountUsageRefreshMs: 5 * 60 * 1000,  // 账号用量自动刷新间隔(0 = 关闭);同时驱动窗口轮转状态的收敛
+    // 账号调度:balanced = 均衡(多账号并行分摊,最久未用的优先,快撞顶的自动让位)
+    //          sticky   = 顺序(始终用绑定/固定账号,直到窗口耗尽才换,旧行为)
+    routingMode: 'balanced',
+    routingReservePct: 15,        // 预留比例:某窗口剩余低于该百分比即视为「将满」,优先让位给更宽裕的账号
+    routingHysteresisPct: 10,     // 滞留带:上一个账号的用量比最省的账号多出不足该百分点时继续用它(保住上游缓存)
     zdr: false,
     cliMode: 'agent', // 信封 mode。服务端枚举（真机 400 报出来的）：agent|learning|custom-agent|custom-agent-create|title-gen|tool-desc|compact|vision
     cliSessionMode: 'interactive', // lifecycle metadata 的 mode —— 注意这是另一个枚举：interactive | non-interactive
@@ -73,6 +78,7 @@ function applyEnvOverrides(cfg) {
   if (process.env.CC_CLI_MODE) cfg.cliMode = process.env.CC_CLI_MODE;
   if (process.env.CC_CLI_SESSION_MODE) cfg.cliSessionMode = process.env.CC_CLI_SESSION_MODE;
   if (process.env.CC_EMPTY_SYSTEM_PLACEHOLDER) cfg.emptySystemPlaceholder = process.env.CC_EMPTY_SYSTEM_PLACEHOLDER !== 'false';
+  if (process.env.CC_ROUTING_MODE) cfg.routingMode = process.env.CC_ROUTING_MODE;
   return cfg;
 }
 
@@ -108,6 +114,7 @@ const ENV_KEYS = {
   fingerprintSalt: 'CC_FINGERPRINT_SALT', deviceProjectDir: 'CC_DEVICE_PROJECT_DIR',
   cliMode: 'CC_CLI_MODE', cliSessionMode: 'CC_CLI_SESSION_MODE',
   emptySystemPlaceholder: 'CC_EMPTY_SYSTEM_PLACEHOLDER',
+  routingMode: 'CC_ROUTING_MODE',
 };
 
 /** 当前被环境变量覆写的配置键列表(这些键改配置文件不会生效)。 */

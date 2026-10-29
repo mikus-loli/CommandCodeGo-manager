@@ -22,6 +22,8 @@ interface FormState {
   accountUsageRefreshMs: string;
   logLevel: string; logFile: string; logRetentionDays: string;
   allowDirectUpstreamKey: boolean;
+  routingMode: 'balanced' | 'sticky';
+  routingReservePct: string; routingHysteresisPct: string;
 }
 
 // 开关:Button variant 切换样式自实现
@@ -87,6 +89,9 @@ export function Settings() {
           logFile: s.logFile ?? '',
           logRetentionDays: s.logRetentionDays != null ? String(s.logRetentionDays) : '',
           allowDirectUpstreamKey: !!s.allowDirectUpstreamKey,
+          routingMode: s.routingMode === 'sticky' ? 'sticky' : 'balanced',
+          routingReservePct: s.routingReservePct != null ? String(s.routingReservePct) : '15',
+          routingHysteresisPct: s.routingHysteresisPct != null ? String(s.routingHysteresisPct) : '10',
         });
       } catch (e) {
         if (alive) {
@@ -117,6 +122,10 @@ export function Settings() {
     if (!/^\d+$/.test(form.logRetentionDays.trim()) || Number(form.logRetentionDays) < 1) {
       e.logRetentionDays = '需为 ≥1 的整数(天)';
     }
+    for (const k of ['routingReservePct', 'routingHysteresisPct'] as const) {
+      const v = Number(form[k].trim());
+      if (!/^\d+$/.test(form[k].trim()) || v < 0 || v > 100) e[k] = '需为 0-100 的整数(百分比)';
+    }
     return e;
   }, [form]);
   const hasErrors = Object.keys(errors).length > 0;
@@ -135,6 +144,9 @@ export function Settings() {
         logLevel: form.logLevel,
         logRetentionDays: Number(form.logRetentionDays.trim()),
         allowDirectUpstreamKey: form.allowDirectUpstreamKey,
+        routingMode: form.routingMode,
+        routingReservePct: Number(form.routingReservePct.trim()),
+        routingHysteresisPct: Number(form.routingHysteresisPct.trim()),
       };
       if (form.host.trim()) patch.host = form.host.trim();
       if (form.apiBase.trim()) patch.apiBase = form.apiBase.trim();
@@ -227,6 +239,44 @@ export function Settings() {
               on={form.zdr} onChange={v => set('zdr', v)} />
             <ToggleRow title="使用上游模型列表" hint="关闭则使用内置模型清单"
               on={form.useProviderModels} onChange={v => set('useProviderModels', v)} />
+          </CardBody>
+        </Card>
+
+        {/* ── 账号调度(多上游账号时怎么分摊流量)── */}
+        <Card>
+          <CardHeader title="账号调度" extra={<span className="text-xs text-txt3">即时生效</span>} />
+          <CardBody className="space-y-1 p-3 md:p-4">
+            <div className="grid gap-3 pb-2 sm:grid-cols-2 sm:gap-4">
+              <Field label="调度模式"
+                hint={form.routingMode === 'balanced'
+                  ? '均衡:余量最大的账号优先,把几个账号的额度拉平用'
+                  : '顺序:绑定/固定账号一路用到窗口耗尽再换(旧行为)'}>
+                <Select value={form.routingMode}
+                  onChange={e => set('routingMode', e.target.value as FormState['routingMode'])}>
+                  <option value="balanced">自动均衡(推荐)</option>
+                  <option value="sticky">顺序使用到耗尽</option>
+                </Select>
+              </Field>
+              <Field label="预留水位(%)" hint="余量低于该比例即视为将满,自动让位给更宽裕的账号">
+                <Input type="number" inputMode="numeric" value={form.routingReservePct}
+                  disabled={form.routingMode !== 'balanced'}
+                  onChange={e => set('routingReservePct', e.target.value)} className="tnum" />
+                {fieldErr('routingReservePct')}
+              </Field>
+              <Field label="滞留带(%)" hint="与最宽裕账号相差在此范围内时,继续用上一个账号以保住上游缓存">
+                <Input type="number" inputMode="numeric" value={form.routingHysteresisPct}
+                  disabled={form.routingMode !== 'balanced'}
+                  onChange={e => set('routingHysteresisPct', e.target.value)} className="tnum" />
+                {fieldErr('routingHysteresisPct')}
+              </Field>
+            </div>
+            <div className="text-xs text-txt3">
+              均衡模式依赖账号用量快照:
+              {Number(form.accountUsageRefreshMs) > 0
+                ? `每 ${Math.max(1, Math.round(Number(form.accountUsageRefreshMs) / 1000))} 秒自动刷新一次`
+                : '自动刷新已关闭,按「账号用量」页的刷新按钮更新'}
+              ;单账号部署下两种模式等价。在「账号用量」页可临时固定某个账号,固定优先于以上策略。
+            </div>
           </CardBody>
         </Card>
 

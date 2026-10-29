@@ -56,7 +56,9 @@ const mock = await startMockUpstream({
 });
 
 const workdir = mkdtempSync(join(tmpdir(), 'ccp-win-proxy-'));
-writeFileSync(join(workdir, 'config.json'), '{}');
+// 顺序(sticky)模式:本文件验证「绑定/固定账号优先、窗口耗尽才换、恢复后回到绑定」,
+// 均衡模式的分摊与滞留由 routing-balanced.test.mjs 覆盖。
+writeFileSync(join(workdir, 'config.json'), '{"routingMode":"sticky"}');
 const db = new DatabaseSync(join(workdir, 'ccp.db'));
 db.exec(SCHEMA);
 const token = 'sk-ccp-' + randomBytes(16).toString('hex');
@@ -162,7 +164,7 @@ test('window-rotation:瞬态 429(无 USAGE_EXCEEDED/无 window)不轮转', async
     },
   });
   const wd = mkdtempSync(join(tmpdir(), 'ccp-win-transient-'));
-  writeFileSync(join(wd, 'config.json'), '{}');
+  writeFileSync(join(wd, 'config.json'), '{"routingMode":"sticky"}');
   const d2 = new DatabaseSync(join(wd, 'ccp.db'));
   d2.exec(SCHEMA);
   d2.prepare('INSERT INTO upstream_keys (name, api_key, status, created_at) VALUES (?,?,?,?)').run('A', 'user_tr_a_000000001', 'active', Date.now());

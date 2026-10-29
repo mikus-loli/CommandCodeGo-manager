@@ -5,7 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   Activity, CalendarClock, ChevronDown, Coins, Gauge, Pin, PinOff, RefreshCw, Users, Wallet,
 } from 'lucide-react';
-import { fetchAccountUsage, refreshAccountUsage, pinAccount, type AccountUsageRow, type WindowLimit } from '../api';
+import {
+  fetchAccountUsage, refreshAccountUsage, pinAccount,
+  type AccountRouting, type AccountUsageRow, type WindowLimit,
+} from '../api';
 import {
   Badge, Button, Card, CardBody, CardHeader, EmptyState, Loading, StatCard, toast, fmtAgo, fmtInt,
 } from '../ui';
@@ -173,6 +176,8 @@ export function AccountUsage() {
 
   // 固定承接账户:点哪个账号,新请求就优先路由到它(高于密钥绑定,额度可用时);
   // 取消固定恢复按绑定路由。全量行替换:旧固定行的徽标也要一起翻掉
+  // 调度模式(自动均衡 / 顺序)与预留水位:页头的状态徽标 + 「恢复均衡」按钮用
+  const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [switchingId, setSwitchingId] = useState<number | null>(null);
   const togglePin = useCallback(async (r: AccountUsageRow) => {
     if (switchingId != null) return; // 防抖:慢响应下双击会连发两次,第二次反转第一次
@@ -181,6 +186,7 @@ export function AccountUsage() {
     try {
       const res = await pinAccount(on ? r.id : null);
       setRows(res.rows ?? []);
+      if (res.routing) setRouting(res.routing);
       toast('ok', on
         ? `已切换到 ${r.name}:新请求优先使用该账号,已在途请求继续完成`
         : '已取消固定:恢复按客户端密钥绑定路由');
@@ -197,6 +203,7 @@ export function AccountUsage() {
       try {
         const d = await fetchAccountUsage();
         setRows(d.rows ?? []);
+        setRouting(d.routing ?? null);
         setLoadErr(null);
         if (autoRefreshed.current) return;
         const list = d.rows ?? [];
@@ -246,9 +253,29 @@ export function AccountUsage() {
       {/* ── 账号卡片列表 ── */}
       <Card>
         <CardHeader
-          title="账号用量"
+          title={
+            <>
+              账号用量
+              {routing && (
+                <Badge kind={routing.mode === 'balanced' ? 'accent' : 'default'}
+                  title={routing.mode === 'balanced'
+                    ? `自动均衡:余量最大的账号优先,余量低于 ${routing.reservePct}% 的账号自动让位`
+                    : '顺序使用:绑定/固定账号一路用到窗口耗尽再换'}>
+                  {routing.mode === 'balanced' ? '自动均衡' : '顺序使用'}
+                </Badge>
+              )}
+            </>
+          }
           extra={
-            <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
+              {routing?.pinned != null && (
+                <Button size="sm" onClick={() => {
+                  const pinnedRow = rows?.find(x => x.pinned);
+                  if (pinnedRow) void togglePin(pinnedRow);
+                }}>
+                  <PinOff size={13} />恢复均衡
+                </Button>
+              )}
               {lastFetch && <span className="tnum hidden text-xs text-txt3 sm:inline">上次刷新 {fmtAgo(lastFetch)}</span>}
               <Button size="sm" onClick={() => void refreshAll()} loading={busyAll} disabled={loading}>
                 <RefreshCw size={13} />全部刷新
@@ -285,6 +312,12 @@ export function AccountUsage() {
                               : !d ? (r.error ? <Badge kind="err">拉取失败</Badge> : <Badge>未刷新</Badge>)
                               : r.error ? <Badge kind="warn">部分失败</Badge> : null}
                             {r.pinned && !disabled && <Badge kind="accent">固定中 · 承接流量</Badge>}
+                            {r.headroom?.atRisk && !disabled && (
+                              <Badge kind="warn"
+                                title={`${r.headroom.window === 'weekly' ? '周窗口' : '5 小时窗口'}余量 ${Math.round((r.headroom.frac ?? 0) * 100)}%,均衡模式会让它先歇着`}>
+                                余量不足
+                              </Badge>
+                            )}
                             {r.windowState?.blocked && !disabled && (
                               <Badge kind="warn">
                                 窗口受限 · 自动轮转中

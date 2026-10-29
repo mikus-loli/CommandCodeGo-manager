@@ -158,7 +158,9 @@ export function StatCard({ label, value, unit, icon, tone = 'brand', status, sub
 }
 
 // ── Badge ──────────────────────────────────────────────────
-export function Badge({ kind = 'default', children }: { kind?: 'default' | 'ok' | 'warn' | 'err' | 'accent'; children: React.ReactNode }) {
+export function Badge({ kind = 'default', title, children }: {
+  kind?: 'default' | 'ok' | 'warn' | 'err' | 'accent'; title?: string; children: React.ReactNode;
+}) {
   const kinds = {
     default: 'bg-panel2 text-txt2 border-line2',
     ok: 'bg-ok/10 text-ok border-ok/25',
@@ -166,7 +168,7 @@ export function Badge({ kind = 'default', children }: { kind?: 'default' | 'ok' 
     err: 'bg-err/10 text-err border-err/25',
     accent: 'bg-accent-dim text-accent border-accent/25',
   };
-  return <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium ${kinds[kind]}`}>{children}</span>;
+  return <span title={title} className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium ${kinds[kind]}`}>{children}</span>;
 }
 
 // ── Table ─────────────────────────────────────────────────

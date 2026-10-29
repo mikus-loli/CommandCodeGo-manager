@@ -17,7 +17,10 @@ async function managed(opts = {}) {
   }
   const { token } = await (await s.proxy.post('/admin/api/client-keys', { name: 'client', upstreamKeyId: 1 })).json();
   await fetch(s.proxy.base + '/admin/api/settings', {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: keys[0], accountUsageRefreshMs: 0 }),
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    // 这个文件验证的是**顺序(sticky)模式**的契约:绑定/固定账号一路用到耗尽再换。
+    // 均衡模式的分摊行为由 routing-balanced.test.mjs 单独覆盖。
+    body: JSON.stringify({ apiKey: keys[0], accountUsageRefreshMs: 0, routingMode: 'sticky' }),
   });
   s.credentials = [{ Authorization: `Bearer ${token}` }, { 'x-api-key': keys[0] }, {}];
   return s;

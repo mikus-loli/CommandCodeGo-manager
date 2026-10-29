@@ -98,6 +98,10 @@ export interface Settings {
   port?: number; host?: string; apiBase?: string; projectSlug?: string;
   logFile?: string; logLevel?: string; zdr?: boolean; useProviderModels?: boolean;
   modelRefreshIntervalMs?: number; accountUsageRefreshMs?: number; allowDirectUpstreamKey?: boolean; logRetentionDays?: number;
+  /** 账号调度:balanced = 均衡分摊(默认),sticky = 顺序使用到耗尽才换 */
+  routingMode?: 'balanced' | 'sticky';
+  routingReservePct?: number;    // 预留水位:余量低于该百分比即视为「将满」
+  routingHysteresisPct?: number; // 滞留带:与最宽裕账号差多少以内继续用上一个
   emptySystemPlaceholder?: boolean; dataDir?: string;
   /** 被环境变量固定的键(容器部署的 HOST/PORT 等):改配置文件不生效,UI 应禁改 */
   envPinned?: string[];
@@ -163,20 +167,29 @@ export interface AccountUsageData {
     periodBasis: string | null;
   } | null;
 }
+export interface AccountHeadroom {
+  known: boolean; frac: number | null; atRisk: boolean;
+  window: string | null; until: number | null;
+}
+export interface AccountRouting {
+  mode: 'balanced' | 'sticky'; reservePct: number; pinned: number | null;
+}
 export interface AccountUsageRow {
   id: number; name: string; status: string;
   fetchedAt: number | null; error: string | null; data: AccountUsageData | null;
+  headroom?: AccountHeadroom;
   pinned?: boolean;
   windowState?: { blocked: boolean; source: 'live' | 'usage' | null; window: string | null; until: number | null };
 }
 
-export const fetchAccountUsage = () => api<{ rows: AccountUsageRow[] }>('/admin/api/account-usage');
+export const fetchAccountUsage = () =>
+  api<{ rows: AccountUsageRow[]; routing?: AccountRouting }>('/admin/api/account-usage');
 export const refreshAccountUsage = (id?: number) =>
   api<{ rows: AccountUsageRow[]; refreshed: number; failed: number }>('/admin/api/account-usage/refresh',
     { method: 'POST', body: id !== undefined ? { id } : {} });
 export const pinAccount = (id: number | null) =>
-  api<{ rows: AccountUsageRow[]; pinned: { id: number; name: string } | null }>('/admin/api/account-usage/pin',
-    { method: 'POST', body: { id } });
+  api<{ rows: AccountUsageRow[]; pinned: { id: number; name: string } | null; routing?: AccountRouting }>(
+    '/admin/api/account-usage/pin', { method: 'POST', body: { id } });
 
 export const fetchOverview = () => api<Overview>('/admin/api/overview');
 export const fetchLogs = (qs = '') => api<{ rows: RequestRow[]; total: number }>(`/admin/api/logs${qs}`);
