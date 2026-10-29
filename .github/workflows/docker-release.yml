@@ -14,7 +14,9 @@ permissions:
   packages: write
 
 env:
-  GHCR_IMAGE: ghcr.io/learningdog1/commandcodego-manager
+  # GHCR 镜像名跟仓库走(fork 推到自己命名空间,fork 也能独立构建);
+  # Docker Hub 只在上游仓库推,避免 fork 把同名 latest 覆盖掉
+  GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/commandcodego-manager
   DH_IMAGE: docker.io/cashewchickengazgazgood/commandcodego-manager
 
 jobs:
@@ -32,7 +34,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # secrets 不能进 step 的 if:,经 env 中转
-      DH_READY: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+      DH_READY: ${{ github.repository == 'learningdog1/CommandCodeGo-manager' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -93,7 +95,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     env:
-      DH_READY: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+      DH_READY: ${{ github.repository == 'learningdog1/CommandCodeGo-manager' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
