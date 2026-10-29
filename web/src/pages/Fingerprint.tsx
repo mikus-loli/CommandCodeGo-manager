@@ -114,8 +114,8 @@ export function Fingerprint() {
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4 sm:gap-x-6 sm:gap-y-1.5">
             <div><span className="text-txt3">平台</span><div className="text-txt">{profile.platform} / {profile.arch}</div></div>
             <div><span className="text-txt3">系统版本</span><div className="text-txt">{profile.osRelease}</div></div>
-            <div><span className="text-txt3">伪造项目目录</span><div className="truncate font-mono text-[11px] text-txt" title={profile.projectDir}>{profile.projectDir}</div></div>
-            <div><span className="text-txt3">x-project-slug</span><div className="font-mono text-[11px] text-txt">{profile.projectSlug}</div></div>
+            <div className="col-span-2 sm:col-span-1"><span className="text-txt3">伪造项目目录</span><div className="break-all font-mono text-[11px] leading-tight text-txt sm:truncate sm:leading-normal" title={profile.projectDir}>{profile.projectDir}</div></div>
+            <div className="col-span-2 sm:col-span-1"><span className="text-txt3">x-project-slug</span><div className="break-all font-mono text-[11px] leading-tight text-txt sm:leading-normal">{profile.projectSlug}</div></div>
             <div><span className="text-txt3">上报周期</span><div className="text-txt">{profile.refreshEvery}</div></div>
             <div><span className="text-txt3">指纹盐 (CC_FINGERPRINT_SALT)</span><div>{profile.fingerprintSalt ? <Badge kind="ok">已配置</Badge> : <Badge kind="default">默认</Badge>}</div></div>
           </div>

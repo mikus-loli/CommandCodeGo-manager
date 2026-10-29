@@ -310,7 +310,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 手机顶栏:菜单 + 当前页名 + 状态点 + 主题 */}
         <header
-          className="flex shrink-0 items-center gap-1 border-b border-line bg-panel/80 px-1.5 backdrop-blur md:hidden"
+          className="flex shrink-0 items-center gap-2 border-b border-line bg-panel/80 px-1.5 backdrop-blur md:hidden"
           style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}
         >
           <button
@@ -326,10 +326,10 @@ export function AppShell() {
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-bold leading-tight text-txt">{meta.title}</div>
             <div className="truncate text-[10px] leading-tight text-txt3">
+              <span className={`mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle ${ov ? (ov.degraded ? 'bg-warn' : 'bg-ok') : 'bg-txt3'}`} aria-hidden="true" />
               {ov ? (ov.degraded ? '存储降级' : '运行中') : '连接中…'} · 在途 {ov?.inflight ?? 0}
             </div>
           </div>
-          <span className={`h-2 w-2 shrink-0 rounded-full ${ov ? (ov.degraded ? 'bg-warn' : 'bg-ok') : 'bg-txt3'}`} aria-hidden="true" />
           <ThemeToggle />
         </header>
 
@@ -350,7 +350,7 @@ export function AppShell() {
           </span>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 md:p-5">
+        <main className="min-h-0 flex-1 overflow-y-auto p-3 pb-6 sm:p-4 sm:pb-8 md:p-5">
           <div className="mx-auto max-w-6xl pb-[env(safe-area-inset-bottom)]">
             {/* 页头:统一大标题 */}
             <div className="mb-3 border-b border-line pb-3 md:mb-4 md:pb-3.5">

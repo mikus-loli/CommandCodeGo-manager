@@ -2,7 +2,7 @@
 // 全部自实现,零第三方 UI 依赖;设计 token 见 styles.css 的 @theme。
 // echarts 不在此处同步引入:见 echart.tsx(按需注册 + 异步 chunk)。
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { X, Sun, Moon } from 'lucide-react';
+import { X, Sun, Moon, Inbox } from 'lucide-react';
 
 /** 图表配置项(宽松类型:页面侧都是字面量对象,无需耦合 echarts 类型)。 */
 export type ChartOption = Record<string, unknown>;
@@ -41,7 +41,7 @@ export function ThemeToggle() {
       onClick={() => setT(next)}
       title={next === 'dark' ? '切换到暗色' : '切换到亮色'}
       aria-label={next === 'dark' ? '切换到暗色' : '切换到亮色'}
-      className="flex h-9 w-9 items-center justify-center rounded-md border border-line bg-panel text-txt2 transition-all duration-150 hover:border-line2 hover:text-txt active:scale-90 md:h-7 md:w-7">
+      className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-panel text-txt2 transition-all duration-150 hover:border-line2 hover:text-txt active:scale-90 md:h-7 md:w-7">
       {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
     </button>
   );
@@ -137,7 +137,7 @@ export function StatCard({ label, value, unit, icon, tone = 'brand', status, sub
   const t = STAT_TONES[tone] ?? STAT_TONES.brand;
   const statusColor = status === 'warn' ? 'text-warn' : status === 'err' ? 'text-err' : status === 'ok' ? 'text-ok' : '';
   return (
-    <Card className="group flex items-center gap-2.5 px-3 py-3 transition-transform duration-200 hover:-translate-y-0.5 md:gap-4 md:px-4 md:py-4">
+    <Card className="group flex items-start gap-2.5 px-3 py-3 transition-transform duration-200 hover:-translate-y-0.5 md:items-center md:gap-4 md:px-4 md:py-4">
       {icon && (
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br md:h-11 md:w-11 md:rounded-xl ${t.grad} text-white shadow-sm`}>
           {icon}
@@ -145,7 +145,7 @@ export function StatCard({ label, value, unit, icon, tone = 'brand', status, sub
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-[11px] text-txt2 md:text-xs">{label}</span>
+          <span className="text-[11px] leading-4 text-txt2 md:truncate md:text-xs">{label}</span>
           {unit && <span className="shrink-0 text-[10px] text-txt3">{unit}</span>}
         </div>
         <div className={`tnum truncate text-lg font-bold leading-6 tracking-tight md:text-[22px] md:leading-7 ${statusColor || t.num}`}>
@@ -180,10 +180,10 @@ export function Table({ children, className = '' }: { children: React.ReactNode;
   );
 }
 export function Th({ className = '', children }: { className?: string; children?: React.ReactNode }) {
-  return <th className={`whitespace-nowrap border-b border-line px-2.5 py-2.5 text-xs font-medium text-txt2 md:px-3 ${className}`}>{children}</th>;
+  return <th className={`whitespace-nowrap border-b border-line px-2 py-2.5 text-xs font-medium text-txt2 md:px-3 ${className}`}>{children}</th>;
 }
 export function Td({ className = '', children }: { className?: string; children?: React.ReactNode }) {
-  return <td className={`border-b border-line/50 px-2.5 py-2 align-middle md:px-3 md:py-2.5 ${className}`}>{children}</td>;
+  return <td className={`border-b border-line/50 px-2 py-2 align-middle md:px-3 md:py-2.5 ${className}`}>{children}</td>;
 }
 
 // ── Pagination(日志/总览最近请求共用;服务端或前端切片分页) ──
@@ -372,8 +372,8 @@ export function ToastHost() {
 // ── 空态 / 骨架屏 / 居中加载 ───────────────────────────────
 export function EmptyState({ icon, title, hint }: { icon?: React.ReactNode; title: string; hint?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-      <div className="text-txt3">{icon ?? '·'}</div>
+    <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center md:py-16">
+      <div className="text-txt3 opacity-70">{icon ?? <Inbox size={20} strokeWidth={1.6} aria-hidden />}</div>
       <div className="text-sm font-medium text-txt2">{title}</div>
       {hint && <div className="max-w-sm text-xs text-txt3">{hint}</div>}
     </div>

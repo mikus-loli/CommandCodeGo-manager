@@ -80,10 +80,10 @@ const LogRow = memo(function LogRow({ r, expanded, onToggle }: {
         </Td>
         <Td className="max-w-40 truncate font-mono text-xs md:max-w-44">{r.endpoint || '—'}</Td>
         <Td className="hidden max-w-32 truncate text-xs text-txt2 md:table-cell">{r.proxy_key ?? '—'}</Td>
-        <Td className="max-w-36 truncate text-xs">{r.model ?? '—'}</Td>
+        <Td className="hidden max-w-36 truncate text-xs md:table-cell">{r.model ?? '—'}</Td>
         <Td><Badge kind={statusKind(r.status_code)}>{r.status_code ?? '—'}</Badge></Td>
         <Td className="hidden text-xs text-txt2 md:table-cell">{r.stream ? '是' : '否'}</Td>
-        <Td className="tnum text-xs">{fmtMs(r.duration_ms)}</Td>
+        <Td className="tnum hidden text-xs md:table-cell">{fmtMs(r.duration_ms)}</Td>
         <Td className="tnum text-xs">{fmtK(r.input_tokens)} / {fmtK(r.output_tokens)}</Td>
         <Td className="hidden max-w-24 truncate font-mono text-xs text-txt2 md:table-cell">{r.finish_reason ?? '—'}</Td>
         <Td className="hidden max-w-32 truncate text-xs md:table-cell">{r.error_type
@@ -283,7 +283,7 @@ export function Logs() {
             {keyOptions.map(k => <option key={k.id} value={String(k.id)}>{k.label}</option>)}
           </Select>
         </div>
-        <Button className="w-[calc(50%-0.25rem)] sm:w-auto" onClick={clearFilters} disabled={!endpoint && !status && !keyId}>清空过滤</Button>
+        <Button size="md" className="w-[calc(50%-0.25rem)] sm:w-auto" onClick={clearFilters} disabled={!endpoint && !status && !keyId}>清空过滤</Button>
         <div className="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end">
           <Badge kind={live ? 'ok' : 'default'}>{live ? '● 实时' : '已暂停'}</Badge>
           <Button size="sm" variant={live ? 'default' : 'primary'} onClick={toggleLive}>
@@ -309,8 +309,8 @@ export function Logs() {
               <thead>
                 <tr>
                   <Th>时间</Th><Th>端点</Th>
-                  <Th className="hidden md:table-cell">Key</Th><Th>模型</Th><Th>状态</Th>
-                  <Th className="hidden md:table-cell">流式</Th><Th>耗时</Th><Th>tokens (in/out)</Th>
+                  <Th className="hidden md:table-cell">Key</Th><Th className="hidden md:table-cell">模型</Th><Th>状态</Th>
+                  <Th className="hidden md:table-cell">流式</Th><Th className="hidden md:table-cell">耗时</Th><Th>tokens<span className="hidden md:inline"> (in/out)</span></Th>
                   <Th className="hidden md:table-cell">finish</Th><Th className="hidden md:table-cell">错误</Th>
                 </tr>
               </thead>

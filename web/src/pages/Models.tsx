@@ -8,7 +8,7 @@ import { fetchUsage, refreshModels, type ModelItem, type UsageRow } from '../api
 import { CATALOG_BY_ID } from '../model-catalog';
 import {
   Badge, Button, Card, EmptyState, Input, Loading, StatCard, Tabs,
-  copyText, fmtInt, fmtK, toast,
+  copyText, fmtInt, fmtK, toast, useNarrow,
 } from '../ui';
 
 const PLAN_LABEL: Record<string, string> = { go: 'Go', pro: 'Pro', goat: 'GOAT', max: 'Max', team: 'Teams' };
@@ -108,6 +108,7 @@ const ModelRow = memo(function ModelRow({ m, u }: {
 });
 
 export function Models() {
+  const narrow = useNarrow();
   const [models, setModels] = useState<ModelItem[] | null>(null);
   const [usage, setUsage] = useState<Map<string, { input: number; cached: number; output: number; requests: number }> | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -235,7 +236,7 @@ export function Models() {
     <div className="space-y-4 md:space-y-5">
       {/* ── 30 天花销汇总 ── */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-        <StatCard label={`近 ${USAGE_DAYS} 天参考成本`} value={fmtUsd(totals.cost)} unit="估算"
+        <StatCard label={narrow ? `近 ${USAGE_DAYS} 天成本` : `近 ${USAGE_DAYS} 天参考成本`} value={fmtUsd(totals.cost)} unit="估算"
           sub="官方单价 × 本地用量" icon={<Coins size={18} />} tone="violet" />
         <StatCard label={`近 ${USAGE_DAYS} 天请求`} value={fmtInt(totals.requests)}
           icon={<Zap size={18} />} />
