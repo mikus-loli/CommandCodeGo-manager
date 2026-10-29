@@ -3,7 +3,7 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } fro
 import { fetchClientKeys, fetchLogs, tokenQuery, type ClientKey, type RequestRow } from '../api';
 import {
   Badge, Button, Card, CardHeader, EmptyState, Loading, Pagination, Select,
-  Table, Td, Th, toast, fmtInt, fmtK, fmtMs, fmtTime,
+  Table, Td, Th, toast, fmtInt, fmtK, fmtMs, fmtTime, fmtTimeShort,
 } from '../ui';
 
 const ENDPOINTS = ['/v1/chat/completions', '/v1/messages', '/v1/responses', '/v1/models'];
@@ -74,22 +74,25 @@ const LogRow = memo(function LogRow({ r, expanded, onToggle }: {
     <Fragment>
       <tr onClick={() => onToggle(r.id)}
         className={`cursor-pointer transition-colors hover:bg-panel2/60 ${expanded ? 'bg-panel2/80' : ''}`}>
-        <Td className="tnum whitespace-nowrap text-xs text-txt2">{fmtTime(r.ts)}</Td>
-        <Td className="max-w-44 truncate font-mono text-xs">{r.endpoint || '—'}</Td>
-        <Td className="max-w-32 truncate text-xs text-txt2">{r.proxy_key ?? '—'}</Td>
+        <Td className="tnum whitespace-nowrap text-xs text-txt2">
+          <span className="hidden md:inline">{fmtTime(r.ts)}</span>
+          <span className="md:hidden">{fmtTimeShort(r.ts)}</span>
+        </Td>
+        <Td className="max-w-40 truncate font-mono text-xs md:max-w-44">{r.endpoint || '—'}</Td>
+        <Td className="hidden max-w-32 truncate text-xs text-txt2 md:table-cell">{r.proxy_key ?? '—'}</Td>
         <Td className="max-w-36 truncate text-xs">{r.model ?? '—'}</Td>
         <Td><Badge kind={statusKind(r.status_code)}>{r.status_code ?? '—'}</Badge></Td>
-        <Td className="text-xs text-txt2">{r.stream ? '是' : '否'}</Td>
+        <Td className="hidden text-xs text-txt2 md:table-cell">{r.stream ? '是' : '否'}</Td>
         <Td className="tnum text-xs">{fmtMs(r.duration_ms)}</Td>
         <Td className="tnum text-xs">{fmtK(r.input_tokens)} / {fmtK(r.output_tokens)}</Td>
-        <Td className="max-w-24 truncate font-mono text-xs text-txt2">{r.finish_reason ?? '—'}</Td>
-        <Td className="max-w-32 truncate text-xs">{r.error_type
+        <Td className="hidden max-w-24 truncate font-mono text-xs text-txt2 md:table-cell">{r.finish_reason ?? '—'}</Td>
+        <Td className="hidden max-w-32 truncate text-xs md:table-cell">{r.error_type
           ? <span className="font-mono text-err">{r.error_type}</span> : <span className="text-txt3">—</span>}</Td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={10} className="border-b border-line/50 bg-panel2/50 px-4 py-3">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs md:grid-cols-3">
+          <td colSpan={10} className="border-b border-line/50 bg-panel2/50 px-3 py-3 md:px-4">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2 md:grid-cols-3">
               <KV label="id" value={String(r.id)} />
               <KV label="完整时间" value={fmtTime(r.ts)} />
               <KV label="端点" value={r.endpoint || '—'} />
@@ -260,28 +263,28 @@ export function Logs() {
   const toggleRow = useCallback((id: number) => setExpandedId(prev => (prev === id ? null : id)), []);
 
   return (
-    <div className="space-y-5">
-      {/* ── 过滤栏 + 实时开关 ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="w-48">
+    <div className="space-y-4 md:space-y-5">
+      {/* ── 过滤栏 + 实时开关(手机上两列换行,实时开关独占一行)── */}
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <div className="w-[calc(50%-0.25rem)] sm:w-48">
           <Select value={endpoint} onChange={e => { setEndpoint(e.target.value); setPage(1); }}>
             <option value="">全部端点</option>
             {ENDPOINTS.map(ep => <option key={ep} value={ep}>{ep}</option>)}
           </Select>
         </div>
-        <div className="w-44">
+        <div className="w-[calc(50%-0.25rem)] sm:w-44">
           <Select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
             {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
         </div>
-        <div className="w-48">
+        <div className="w-[calc(50%-0.25rem)] sm:w-48">
           <Select value={keyId} onChange={e => { setKeyId(e.target.value); setPage(1); }}>
             <option value="">全部 Key</option>
             {keyOptions.map(k => <option key={k.id} value={String(k.id)}>{k.label}</option>)}
           </Select>
         </div>
-        <Button size="md" onClick={clearFilters} disabled={!endpoint && !status && !keyId}>清空过滤</Button>
-        <div className="ml-auto flex items-center gap-2">
+        <Button className="w-[calc(50%-0.25rem)] sm:w-auto" onClick={clearFilters} disabled={!endpoint && !status && !keyId}>清空过滤</Button>
+        <div className="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end">
           <Badge kind={live ? 'ok' : 'default'}>{live ? '● 实时' : '已暂停'}</Badge>
           <Button size="sm" variant={live ? 'default' : 'primary'} onClick={toggleLive}>
             {live ? '暂停实时' : '开启实时'}
@@ -305,8 +308,10 @@ export function Logs() {
             <Table>
               <thead>
                 <tr>
-                  <Th>时间</Th><Th>端点</Th><Th>Key</Th><Th>模型</Th><Th>状态</Th><Th>流式</Th>
-                  <Th>耗时</Th><Th>tokens (in/out)</Th><Th>finish</Th><Th>错误</Th>
+                  <Th>时间</Th><Th>端点</Th>
+                  <Th className="hidden md:table-cell">Key</Th><Th>模型</Th><Th>状态</Th>
+                  <Th className="hidden md:table-cell">流式</Th><Th>耗时</Th><Th>tokens (in/out)</Th>
+                  <Th className="hidden md:table-cell">finish</Th><Th className="hidden md:table-cell">错误</Th>
                 </tr>
               </thead>
               <tbody>

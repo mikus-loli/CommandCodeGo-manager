@@ -63,7 +63,7 @@ function WindowBar({ label, used, cap, exceeded, resetAt, now, unit }: {
           <div className={`h-full rounded-full ${bar} transition-all duration-500`}
             style={{ width: `${known ? Math.max(pct, used! > 0 ? 3 : 0) : 0}%` }} />
         </div>
-        <span className="w-24 shrink-0 text-right">{countdown}</span>
+        <span className="w-20 shrink-0 text-right md:w-24">{countdown}</span>
       </div>
     </div>
   );
@@ -96,10 +96,10 @@ function Pool({ label, value, tone }: { label: string; value: number; tone?: str
 // 展开明细里的小字段(值区 nowrap + 紧凑格式,完整内容放 title)
 function KV({ label, value, tone, title, wide }: { label: string; value: ReactNode; tone?: string; title?: string; wide?: boolean }) {
   return (
-    <div className={`min-w-0 rounded-lg border border-line bg-panel2 px-3 py-2 ${wide ? 'col-span-2' : ''}`}>
+    <div className={`min-w-0 overflow-hidden rounded-lg border border-line bg-panel2 px-2.5 py-2 md:px-3 ${wide ? 'col-span-2' : ''}`}>
       <div className="truncate text-[10px] uppercase tracking-wide text-txt3" title={label}>{label}</div>
       <div title={title ?? (typeof value === 'string' ? value : undefined)}
-        className={`tnum mt-0.5 min-w-0 whitespace-nowrap text-sm font-medium ${tone ?? 'text-txt'}`}>{value}</div>
+        className={`tnum mt-0.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium ${tone ?? 'text-txt'}`}>{value}</div>
     </div>
   );
 }
@@ -229,9 +229,9 @@ export function AccountUsage() {
   const loading = rows === null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       {/* ── 汇总卡 ── */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <StatCard label="账号(启用 / 总数)" value={loading ? '…' : `${stats.active} / ${stats.total}`}
           icon={<Users size={18} />} />
         <StatCard label="信用余额合计" value={loading ? '…' : fmt2(stats.creditsTotal)}
@@ -248,7 +248,7 @@ export function AccountUsage() {
         <CardHeader
           title="账号用量"
           extra={
-            <div className="flex items-center gap-3">
+            <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
               {lastFetch && <span className="tnum hidden text-xs text-txt3 sm:inline">上次刷新 {fmtAgo(lastFetch)}</span>}
               <Button size="sm" onClick={() => void refreshAll()} loading={busyAll} disabled={loading}>
                 <RefreshCw size={13} />全部刷新
@@ -263,7 +263,7 @@ export function AccountUsage() {
           ) : rows.length === 0 ? (
             <EmptyState title="暂无上游账号" hint="先在「密钥管理」导入 Command Code 账号(user_* 密钥),再回到本页刷新用量。" />
           ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-3 md:gap-4 xl:grid-cols-2">
               {rows.map(r => {
                 const d = r.data;
                 const c = d?.credits;
@@ -274,12 +274,12 @@ export function AccountUsage() {
                   <div key={r.id}
                     className={`rounded-xl border bg-panel transition-colors ${disabled ? 'border-line/60 opacity-60' : open ? 'border-accent/40' : 'border-line'}`}>
                     {/* ── 卡头:账号身份 + 套餐 + 刷新 ── */}
-                    <div className="flex items-start justify-between gap-3 px-4 pt-3.5">
+                    <div className="flex flex-col gap-2 px-3 pt-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3 md:px-4 md:pt-3.5">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${disabled ? 'bg-txt3' : 'bg-ok'}`} />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="max-w-48 truncate text-sm font-semibold text-txt">{r.name}</span>
+                            <span className="max-w-[9.5rem] truncate text-sm font-semibold text-txt sm:max-w-48">{r.name}</span>
                             {disabled
                               ? <Badge>已停用</Badge>
                               : !d ? (r.error ? <Badge kind="err">拉取失败</Badge> : <Badge>未刷新</Badge>)
@@ -306,7 +306,7 @@ export function AccountUsage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
                         {!disabled && (
                           <Button size="sm"
                             variant={r.pinned ? 'primary' : 'default'}
@@ -321,26 +321,27 @@ export function AccountUsage() {
                           </Button>
                         )}
                         <button
+                          aria-label="刷新此账号"
                           onClick={() => { if (!disabled) void refreshOne(r.id); }}
                           disabled={disabled || refreshing.has(r.id)}
                           title={disabled ? '已停用账号不可刷新' : '刷新此账号'}
-                          className="shrink-0 rounded-lg border border-line p-1.5 text-txt3 transition-all duration-150 hover:border-line2 hover:text-accent active:scale-90 disabled:cursor-not-allowed disabled:opacity-40">
+                          className="shrink-0 rounded-lg border border-line p-2 text-txt3 md:p-1.5 transition-all duration-150 hover:border-line2 hover:text-accent active:scale-90 disabled:cursor-not-allowed disabled:opacity-40">
                           <RefreshCw size={14} className={refreshing.has(r.id) ? 'animate-spin' : ''} />
                         </button>
                       </div>
                     </div>
 
                     {r.error && (
-                      <div className="mx-4 mt-2.5 rounded-lg border border-warn/25 bg-warn/10 px-3 py-1.5 text-[11px] text-warn">
+                      <div className="mx-3 mt-2.5 rounded-lg md:mx-4 border border-warn/25 bg-warn/10 px-3 py-1.5 text-[11px] text-warn">
                         上游返回部分失败:{r.error}
                       </div>
                     )}
 
                     {/* ── 三条模板条 ── */}
                     {disabled ? (
-                      <div className="px-4 pb-3.5 pt-3 text-xs text-txt3">账号已停用,重新启用后可刷新用量。</div>
+                      <div className="px-3 pb-3.5 pt-3 text-xs text-txt3 md:px-4">账号已停用,重新启用后可刷新用量。</div>
                     ) : d ? (
-                      <div className="space-y-3.5 px-4 pb-1 pt-3.5">
+                      <div className="space-y-3.5 px-3 pb-1 pt-3.5 md:px-4">
                         <WindowBar label="5 小时滚动" unit="条"
                           used={d.windowLimits?.fiveHour?.used ?? null} cap={d.windowLimits?.fiveHour?.cap ?? null}
                           exceeded={d.windowLimits?.fiveHour?.exceeded} resetAt={d.windowLimits?.fiveHour?.resetAt} now={now} />
@@ -350,14 +351,14 @@ export function AccountUsage() {
                         <MonthlyBar used={c?.monthlyUsed ?? null} total={c?.monthlyTotal ?? null} remaining={c?.monthly ?? 0} now={now} />
                       </div>
                     ) : (
-                      <div className="px-4 pb-3.5 pt-3 text-xs text-txt3">
+                      <div className="px-3 pb-3.5 pt-3 text-xs text-txt3 md:px-4">
                         暂无数据,点击右上刷新按钮拉取。
                       </div>
                     )}
 
                     {/* ── 信用余额 + 期账摘要 ── */}
                     {d && (
-                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line/60 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line/60 px-3 py-3 md:px-4">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <span className="text-[11px] text-txt3">信用余额</span>
                           <span className={`tnum text-xl font-bold leading-none ${
@@ -382,13 +383,13 @@ export function AccountUsage() {
                     {d && (
                       <div className="border-t border-line/60">
                         <button onClick={() => setExpanded(prev => (prev === r.id ? null : r.id))}
-                          className="flex w-full items-center justify-center gap-1.5 py-2 text-[11px] text-txt3 transition-colors hover:text-accent">
+                          className="flex w-full items-center justify-center gap-1.5 px-2 py-2.5 text-center text-[10px] text-txt3 transition-colors hover:text-accent md:text-[11px]">
                           <CalendarClock size={12} />
                           期账累计明细(自 {d.plan?.currentPeriodStart?.slice(0, 10) ?? '期初'} 起)
                           <ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                         </button>
                         {open && (
-                          <div className="px-4 pb-4">
+                          <div className="px-3 pb-4 md:px-4">
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                               <KV label="总请求" value={fmtInt(p?.totalCount)} />
                               <KV label="完成 / 失败" value={`${fmtInt(p?.completedCount)} / ${fmtInt(p?.failedCount)}`} />

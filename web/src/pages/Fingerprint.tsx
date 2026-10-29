@@ -40,9 +40,9 @@ function KeyCard({ k }: { k: FingerprintKeyRow }) {
           : <Badge kind="default">待首次上报</Badge>
         }
       />
-      <CardBody>
+      <CardBody className="p-3 md:p-4">
         {/* 伪造的设备形态(上游看到的"这台机器") */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-1.5 md:grid-cols-3">
           <div><span className="text-txt3">CPU</span><div className="text-txt">{k.cpuModel ?? '—'}</div></div>
           <div><span className="text-txt3">核心 / 内存</span><div className="tnum text-txt">{k.cpuCount ?? '—'} 核 / {k.memGiB ?? '—'} GB</div></div>
           <div><span className="text-txt3">时区</span><div className="text-txt">{k.timezone ?? '—'}</div></div>
@@ -93,11 +93,11 @@ export function Fingerprint() {
   const { profile, keys } = info;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       {/* ── 机制说明 ── */}
       <Card>
         <CardBody>
-          <p className="text-[13px] leading-relaxed text-txt2">
+          <p className="text-xs leading-relaxed text-txt2 md:text-[13px]">
             本代理为每个上游密钥<b className="text-txt">确定性伪造一台 Windows 设备身份</b>(CPU / 内存 / 时区 / MAC / MachineGuid / 主机名 / git 邮箱),
             按 8h±2h 周期上报指纹与生命周期事件,并在每次生成请求中携带同一份设备档案。
             同一密钥重启、多实例、停用数周后恢复,上游看到的始终是同一台设备;<b className="text-txt">宿主机的真实平台、Node 版本与工作目录不会透出</b>。
@@ -111,7 +111,7 @@ export function Fingerprint() {
         <CardHeader title="统一设备档案" icon={<FingerprintIcon size={15} />}
           extra={<Badge kind="accent">{keys.length} 个密钥在用</Badge>} />
         <CardBody>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4 sm:gap-x-6 sm:gap-y-1.5">
             <div><span className="text-txt3">平台</span><div className="text-txt">{profile.platform} / {profile.arch}</div></div>
             <div><span className="text-txt3">系统版本</span><div className="text-txt">{profile.osRelease}</div></div>
             <div><span className="text-txt3">伪造项目目录</span><div className="truncate font-mono text-[11px] text-txt" title={profile.projectDir}>{profile.projectDir}</div></div>
@@ -123,9 +123,9 @@ export function Fingerprint() {
       </Card>
 
       {/* ── 每密钥指纹 ── */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
         <Button onClick={() => void load()} loading={busy}><RefreshCw size={14} />刷新</Button>
-        <span className="text-xs text-txt3">指纹状态为运行时数据,进程重启后按需重建;仅显示启动后使用过的密钥</span>
+        <span className="text-[11px] text-txt3 md:text-xs">指纹状态为运行时数据,进程重启后按需重建;仅显示启动后使用过的密钥</span>
       </div>
       {keys.length === 0 ? (
         <Card>
@@ -136,7 +136,7 @@ export function Fingerprint() {
           />
         </Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-3 md:gap-4 lg:grid-cols-2">
           {keys.map(k => <KeyCard key={k.keyPrefix} k={k} />)}
         </div>
       )}

@@ -1,7 +1,7 @@
 // 密钥管理(Phase 3.4):上游密钥(user_* 订阅密钥)与客户端密钥(sk-ccp-*)双 Tab,
 // 覆盖 CRUD、探活、启停切换与创建结果的一次性 token 展示。
 import { useCallback, useEffect, useState } from 'react';
-import { Repeat, Terminal } from 'lucide-react';
+import { Power, Radio, Repeat, Terminal, Trash2 } from 'lucide-react';
 import { ApiError, api, batchImportUpstreamKeys, fetchClientKeys, fetchUpstreamKeys, type ClientKey, type UpstreamKey } from '../api';
 import {
   Badge, Button, Card, CardHeader, Dialog, EmptyState, Field, Input, Loading, Select,
@@ -157,16 +157,16 @@ function UpstreamPanel({ rows, clients, reload }: {
   return (
     <>
       {/* 多账户与自动轮转说明(H5:功能显性化,单账户时也可见) */}
-      <Card className="px-4 py-3.5">
+      <Card className="px-3 py-3 md:px-4 md:py-3.5">
         <div className="flex flex-wrap items-start gap-x-6 gap-y-2 text-xs leading-relaxed text-txt2">
           <div className="flex items-center gap-1.5 text-sm font-semibold text-txt">
             <Repeat size={15} className="text-accent" />多账户与额度轮转
           </div>
-          <div className="min-w-56 flex-1">
+          <div className="min-w-0 flex-1 basis-full lg:basis-56">
             <span className="text-txt">加账户:</span>点「批量导入」,把各账号的 user_* 密钥一行一个粘贴进来
             (网页后台 → API keys 复制,名称自动取账户名);也可用 CLI 登录后「一键导入」
           </div>
-          <div className="min-w-56 flex-1">
+          <div className="min-w-0 flex-1 basis-full lg:basis-56">
             <span className="text-txt">自动轮转:</span>harness 用客户端密钥(sk-ccp-*)接入时,优先用「账号用量」页固定的承接账号,其次绑定账户;额度耗尽(402)自动切换其他启用账户并当场重试,耗尽的标记为黄色,额度重置后点「重新启用」
           </div>
         </div>
@@ -180,7 +180,7 @@ function UpstreamPanel({ rows, clients, reload }: {
 
       {/* CLI 登录一键导入(Go 订阅推荐路径;切换账号后可重复导入,叠加多账户) */}
       {cli?.installed && (
-        <Card className="flex flex-wrap items-center gap-3 border-accent/30 bg-accent-dim px-4 py-3">
+        <Card className="flex flex-wrap items-center gap-2 border-accent/30 bg-accent-dim px-3 py-3 md:gap-3 md:px-4">
           <Terminal className="h-5 w-5 shrink-0 text-accent" size={20} />
           <div className="min-w-0 flex-1 text-sm">
             <span className="font-medium text-txt">检测到 Command Code CLI 登录</span>
@@ -189,7 +189,7 @@ function UpstreamPanel({ rows, clients, reload }: {
               导入当前 CLI 登录的账户;要叠加多个账号,用「批量导入」粘贴各账号密钥即可,无需在 CLI 里退出重登
             </div>
           </div>
-          <Button variant="primary" loading={importing} onClick={() => void importCli()}>一键导入</Button>
+          <Button className="w-full sm:w-auto" variant="primary" loading={importing} onClick={() => void importCli()}>一键导入</Button>
         </Card>
       )}
 
@@ -197,7 +197,7 @@ function UpstreamPanel({ rows, clients, reload }: {
         <CardHeader title="上游密钥" extra={
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => setBatchOpen(true)}>批量导入</Button>
-            <Button size="sm" variant="primary" onClick={openAdd}>添加上游密钥</Button>
+            <Button size="sm" variant="primary" onClick={openAdd}>添加<span className="hidden sm:inline">上游密钥</span></Button>
           </div>
         } />
         {!rows ? (
@@ -216,27 +216,39 @@ function UpstreamPanel({ rows, clients, reload }: {
           <Table>
             <thead>
               <tr>
-                <Th>名称</Th><Th>密钥</Th><Th>状态</Th><Th>创建时间</Th><Th>最近使用</Th><Th className="text-right">操作</Th>
+                <Th>名称</Th><Th className="hidden md:table-cell">密钥</Th><Th>状态</Th>
+                <Th className="hidden md:table-cell">创建时间</Th><Th className="hidden md:table-cell">最近使用</Th>
+                <Th className="text-right">操作</Th>
               </tr>
             </thead>
             <tbody>
               {rows.map(k => (
                 <tr key={k.id} className="transition-colors hover:bg-panel2/60">
                   <Td className="max-w-40 truncate font-medium">{k.name}</Td>
-                  <Td className="tnum max-w-56 truncate text-xs text-txt2">{k.api_key}</Td>
+                  <Td className="tnum hidden max-w-56 truncate text-xs text-txt2 md:table-cell">{k.api_key}</Td>
                   <Td><StatusBadge status={k.status} /></Td>
-                  <Td className="tnum whitespace-nowrap text-xs text-txt2">{fmtTime(k.created_at)}</Td>
-                  <Td className="tnum whitespace-nowrap text-xs text-txt2">{fmtAgo(k.last_used_at)}</Td>
+                  <Td className="tnum hidden whitespace-nowrap text-xs text-txt2 md:table-cell">{fmtTime(k.created_at)}</Td>
+                  <Td className="tnum hidden whitespace-nowrap text-xs text-txt2 md:table-cell">{fmtAgo(k.last_used_at)}</Td>
                   <Td className="text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <Button size="sm" loading={testingId === k.id}
+                    <div className="flex justify-end gap-1 md:gap-1.5">
+                      <Button size="sm" className="px-2 md:px-3" loading={testingId === k.id}
                         disabled={k.status !== 'active' || testingId === k.id}
-                        title={k.status !== 'active' ? '仅启用状态的密钥可探活' : undefined}
-                        onClick={() => void testKey(k)}>探活</Button>
-                      <Button size="sm" loading={togglingId === k.id} onClick={() => void toggleStatus(k)}>
-                        {k.status === 'active' ? '停用' : k.status === 'exhausted' ? '重新启用' : '启用'}
+                        title={k.status !== 'active' ? '仅启用状态的密钥可探活' : '探活'}
+                        aria-label="探活"
+                        onClick={() => void testKey(k)}>
+                        <Radio size={13} className="md:hidden" /><span className="hidden md:inline">探活</span>
                       </Button>
-                      <Button size="sm" variant="danger" onClick={() => { setDelErr(''); setDelTarget(k); }}>删除</Button>
+                      <Button size="sm" className="px-2 md:px-3" loading={togglingId === k.id}
+                        aria-label={k.status === 'active' ? '停用' : '启用'}
+                        title={k.status === 'active' ? '停用' : k.status === 'exhausted' ? '重新启用' : '启用'}
+                        onClick={() => void toggleStatus(k)}>
+                        <Power size={13} className="md:hidden" />
+                        <span className="hidden md:inline">{k.status === 'active' ? '停用' : k.status === 'exhausted' ? '重新启用' : '启用'}</span>
+                      </Button>
+                      <Button size="sm" className="px-2 md:px-3" variant="danger" aria-label="删除" title="删除"
+                        onClick={() => { setDelErr(''); setDelTarget(k); }}>
+                        <Trash2 size={13} className="md:hidden" /><span className="hidden md:inline">删除</span>
+                      </Button>
                     </div>
                   </Td>
                 </tr>
@@ -407,24 +419,32 @@ function ClientPanel({ rows, ups, reload }: {
           <Table>
             <thead>
               <tr>
-                <Th>名称</Th><Th>前缀</Th><Th>绑定上游</Th><Th>状态</Th><Th>创建时间</Th><Th>最近使用</Th><Th className="text-right">操作</Th>
+                <Th>名称</Th><Th className="hidden md:table-cell">前缀</Th><Th className="hidden sm:table-cell">绑定上游</Th><Th>状态</Th>
+                <Th className="hidden md:table-cell">创建时间</Th><Th className="hidden md:table-cell">最近使用</Th>
+                <Th className="text-right">操作</Th>
               </tr>
             </thead>
             <tbody>
               {rows.map(k => (
                 <tr key={k.id} className="transition-colors hover:bg-panel2/60">
                   <Td className="max-w-40 truncate font-medium">{k.name}</Td>
-                  <Td className="tnum text-xs text-txt2">{k.key_prefix}</Td>
-                  <Td className="max-w-40 truncate text-txt2">{k.upstream_name ?? '—'}</Td>
+                  <Td className="tnum hidden text-xs text-txt2 md:table-cell">{k.key_prefix}</Td>
+                  <Td className="hidden max-w-40 truncate text-txt2 sm:table-cell">{k.upstream_name ?? '—'}</Td>
                   <Td><StatusBadge status={k.status} /></Td>
-                  <Td className="tnum whitespace-nowrap text-xs text-txt2">{fmtTime(k.created_at)}</Td>
-                  <Td className="tnum whitespace-nowrap text-xs text-txt2">{fmtAgo(k.last_used_at)}</Td>
+                  <Td className="tnum hidden whitespace-nowrap text-xs text-txt2 md:table-cell">{fmtTime(k.created_at)}</Td>
+                  <Td className="tnum hidden whitespace-nowrap text-xs text-txt2 md:table-cell">{fmtAgo(k.last_used_at)}</Td>
                   <Td className="text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <Button size="sm" loading={togglingId === k.id} onClick={() => void toggleStatus(k)}>
-                        {k.status === 'active' ? '停用' : '启用'}
+                    <div className="flex justify-end gap-1 md:gap-1.5">
+                      <Button size="sm" className="px-2 md:px-3" loading={togglingId === k.id}
+                        aria-label={k.status === 'active' ? '停用' : '启用'} title={k.status === 'active' ? '停用' : '启用'}
+                        onClick={() => void toggleStatus(k)}>
+                        <Power size={13} className="md:hidden" />
+                        <span className="hidden md:inline">{k.status === 'active' ? '停用' : '启用'}</span>
                       </Button>
-                      <Button size="sm" variant="danger" onClick={() => setDelTarget(k)}>删除</Button>
+                      <Button size="sm" className="px-2 md:px-3" variant="danger" aria-label="删除" title="删除"
+                        onClick={() => setDelTarget(k)}>
+                        <Trash2 size={13} className="md:hidden" /><span className="hidden md:inline">删除</span>
+                      </Button>
                     </div>
                   </Td>
                 </tr>
@@ -509,11 +529,11 @@ export function Keys() {
   useEffect(() => { void reload(); }, [reload]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       <Tabs
         items={[
-          { id: 'upstream', label: '上游密钥(Command Code)' },
-          { id: 'client', label: '客户端密钥(sk-ccp-*)' },
+          { id: 'upstream', label: '上游密钥(Command Code)', narrowLabel: '上游密钥' },
+          { id: 'client', label: '客户端密钥(sk-ccp-*)', narrowLabel: '客户端密钥' },
         ]}
         value={tab}
         onChange={setTab} />

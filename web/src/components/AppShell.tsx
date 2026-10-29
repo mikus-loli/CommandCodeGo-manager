@@ -1,13 +1,14 @@
 // App Shell:左侧导航 + 顶栏运行状态(轮询 /overview,15s)。
 // H2:顶栏为窗口拖动区(macOS hiddenInset 无系统标题栏,Web 侧提供 drag);
 // 顶栏内的交互控件(主题切换)需显式 no-drag 才可点击。
-import { useEffect, useRef, useState } from 'react';
+// 移动端(<md):侧栏折叠为抽屉,顶栏换成「菜单 + 页名 + 状态 + 主题」。
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useOutlet } from 'react-router-dom';
 import {
-  Terminal, LayoutDashboard, ScrollText, BarChart3, Boxes, KeyRound, Fingerprint, Settings, Users,
+  Terminal, LayoutDashboard, ScrollText, BarChart3, Boxes, KeyRound, Fingerprint, Settings, Users, Menu, X,
 } from 'lucide-react';
 import { fetchOverview, setAdminToken, type ApiError, type Overview } from '../api';
-import { ThemeToggle, toast } from '../ui';
+import { ThemeToggle, useScrollLock, toast } from '../ui';
 
 const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: typeof LayoutDashboard; end: boolean }[] }[] = [
   {
@@ -91,7 +92,7 @@ function TokenGate({ onRetry }: { onRetry: () => void }) {
     }
   };
   return (
-    <div className="flex h-full items-center justify-center p-6">
+    <div className="flex h-full items-center justify-center p-5">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-panel p-6 shadow-lg">
         <div className="brand-gradient mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-md">
           <Terminal size={24} strokeWidth={2.4} />
@@ -103,14 +104,87 @@ function TokenGate({ onRetry }: { onRetry: () => void }) {
           onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') void submit(); }}
           placeholder="输入管理令牌"
-          className="tnum mt-5 w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-txt outline-none transition-colors focus:border-accent"
+          className="tnum mt-5 h-11 w-full rounded-lg border border-line bg-bg px-3 text-base text-txt outline-none transition-colors focus:border-accent"
         />
         {err && <div className="mt-2 text-center text-xs text-err">{err}</div>}
         <button
           onClick={() => void submit()} disabled={busy || !val.trim()}
-          className="brand-gradient mt-4 w-full rounded-lg py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-50">
+          className="brand-gradient mt-4 h-11 w-full rounded-lg text-sm font-semibold text-white transition-opacity disabled:opacity-50">
           {busy ? '验证中…' : '进入管理界面'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function Brand() {
+  return (
+    <div className="flex min-w-0 items-center gap-3 px-3.5 py-4 md:px-4 md:py-5">
+      <div className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-md">
+        <Terminal size={20} strokeWidth={2.4} />
+      </div>
+      <div className="min-w-0">
+        <div className="text-[15px] font-extrabold leading-tight tracking-wide text-txt">CC Proxy</div>
+        <div className="truncate text-[10px] leading-tight text-txt3">CommandCode 订阅反代</div>
+      </div>
+    </div>
+  );
+}
+
+// 导航列表:桌面侧栏与手机抽屉共用一份,避免两处维护漂移。
+function NavList({ onNavigate, drawer = false }: { onNavigate?: () => void; drawer?: boolean }) {
+  return (
+    <nav className={`flex flex-1 flex-col gap-4 px-2 ${drawer ? 'mt-1 overflow-y-auto' : 'mt-1'}`}>
+      {NAV_GROUPS.map(group => (
+        <div key={group.title}>
+          <div className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-txt3">{group.title}</div>
+          <div className="flex flex-col gap-0.5">
+            {group.items.map(({ to, label, icon: Icon, end }) => (
+              <NavLink key={to} to={to} end={end} onClick={onNavigate}
+                className={({ isActive }) =>
+                  `relative flex items-center gap-3 rounded-lg px-3 text-sm transition-all duration-150 active:scale-[0.98] ${
+                    drawer ? 'min-h-[42px] py-2.5' : 'py-2 gap-2.5'} ${
+                    isActive ? 'bg-accent-dim font-semibold text-accent' : 'text-txt2 hover:bg-panel2 hover:text-txt'}`}>
+                {({ isActive }) => (<>
+                  {isActive && <span className="brand-gradient absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full" />}
+                  <Icon size={drawer ? 18 : 16} strokeWidth={2} />
+                  {label}
+                </>)}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+// 底部状态块:填充侧栏并常驻关键信息
+function StatusBlock({ ov }: { ov: Overview | null }) {
+  return (
+    <div className="border-t border-line px-3.5 py-3">
+      <div className="rounded-lg bg-panel2 px-3 py-2.5 text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${ov ? (ov.degraded ? 'bg-warn' : 'bg-ok') : 'bg-txt3'}`} />
+          <span className="text-txt">{ov ? (ov.degraded ? '存储降级运行' : '服务运行中') : '连接中…'}</span>
+        </div>
+        <button
+          onClick={() => {
+            // 用户实际访问的地址(而非写死 127.0.0.1:port):局域网/容器/反代
+            // 部署下这才是对的「服务地址」
+            navigator.clipboard?.writeText(window.location.origin).then(
+              () => toast('ok', '已复制服务地址'),
+              () => {},
+            );
+          }}
+          className="tnum mt-1.5 block min-h-8 w-full truncate rounded bg-bg px-1.5 py-1.5 text-left text-[11px] leading-4 text-txt2 transition-colors hover:text-accent"
+          title="点击复制服务地址">
+          {window.location.origin}
+        </button>
+        <div className="mt-1.5 flex items-center justify-between text-[10px] text-txt3">
+          <span>在途 {ov?.inflight ?? 0}</span>
+          <span className="tnum">v{ov?.version ?? '…'}</span>
+        </div>
       </div>
     </div>
   );
@@ -120,9 +194,55 @@ export function AppShell() {
   const [ov, setOv] = useState<Overview | null>(null);
   // unknown=尚未判定;no=服务端要求令牌(401);yes=已通过(或服务端未启用鉴权)
   const [authed, setAuthed] = useState<'unknown' | 'no' | 'yes'>('unknown');
+  const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const meta = PAGE_META.slice().reverse().find(m => location.pathname === m.match || location.pathname.startsWith(m.match + '/'))
     ?? PAGE_META[0];
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  useScrollLock(navOpen, 'nav-open');
+
+  // 路由变化即收起抽屉(点导航项、前进后退都覆盖)
+  useEffect(() => { setNavOpen(false); }, [location.pathname]);
+
+  // 视口回到桌面宽度时收起,避免遮罩状态残留
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = () => { if (mq.matches) setNavOpen(false); };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // 抽屉开启:锁背景滚动、聚焦关闭按钮、支持 Esc;关闭后焦点回到菜单按钮
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setNavOpen(false); };
+    window.addEventListener('keydown', onKey);
+    // 先解 inert 再聚焦:关闭态面板带着 inert,直接 focus 会被浏览器忽略
+    if (panelRef.current) panelRef.current.inert = false;
+    closeBtnRef.current?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      menuBtnRef.current?.focus?.();
+    };
+  }, [navOpen]);
+
+  // 关闭时用 inert 把移出屏幕的面板排除出焦点顺序
+  useEffect(() => {
+    if (panelRef.current) panelRef.current.inert = !navOpen;
+  }, [navOpen]);
+
+  const trapFocus = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    const nodes = panelRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])');
+    if (!nodes || nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -147,74 +267,76 @@ export function AppShell() {
 
   return (
     <div className="flex h-full">
-      {/* ── 侧栏 ── */}
-      <aside className="flex w-52 shrink-0 flex-col border-r border-line bg-panel">
-        <div className="flex items-center gap-3 px-4 py-5">
-          <div className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-md">
-            <Terminal size={20} strokeWidth={2.4} />
-          </div>
-          <div>
-            <div className="text-[15px] font-extrabold leading-tight tracking-wide text-txt">CC Proxy</div>
-            <div className="text-[10px] leading-tight text-txt3">CommandCode 订阅反代</div>
-          </div>
-        </div>
-
-        <nav className="mt-1 flex flex-1 flex-col gap-4 px-2">
-          {NAV_GROUPS.map(group => (
-            <div key={group.title}>
-              <div className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-txt3">{group.title}</div>
-              <div className="flex flex-col gap-0.5">
-                {group.items.map(({ to, label, icon: Icon, end }) => (
-                  <NavLink key={to} to={to} end={end}
-                    className={({ isActive }) =>
-                      `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150 active:scale-[0.98] ${
-                        isActive ? 'bg-accent-dim font-semibold text-accent' : 'text-txt2 hover:bg-panel2 hover:text-txt'}`}>
-                    {({ isActive }) => (<>
-                      {isActive && <span className="brand-gradient absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full" />}
-                      <Icon size={16} strokeWidth={2} />
-                      {label}
-                    </>)}
-                  </NavLink>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* 底部状态块:填充侧栏并常驻关键信息 */}
-        <div className="border-t border-line px-3.5 py-3">
-          <div className="rounded-lg bg-panel2 px-3 py-2.5 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 shrink-0 rounded-full ${ov ? (ov.degraded ? 'bg-warn' : 'bg-ok') : 'bg-txt3'}`} />
-              <span className="text-txt">{ov ? (ov.degraded ? '存储降级运行' : '服务运行中') : '连接中…'}</span>
-            </div>
-            <button
-              onClick={() => {
-                // 用户实际访问的地址(而非写死 127.0.0.1:port):局域网/容器/反代
-                // 部署下这才是对的「服务地址」
-                navigator.clipboard?.writeText(window.location.origin).then(
-                  () => toast('ok', '已复制服务地址'),
-                  () => {},
-                );
-              }}
-              className="tnum mt-1.5 block w-full truncate rounded bg-bg px-1.5 py-1 text-left text-[11px] text-txt2 transition-colors hover:text-accent"
-              title="点击复制服务地址">
-              {window.location.origin}
-            </button>
-            <div className="mt-1.5 flex items-center justify-between text-[10px] text-txt3">
-              <span>在途 {ov?.inflight ?? 0}</span>
-              <span className="tnum">v{ov?.version ?? '…'}</span>
-            </div>
-          </div>
-        </div>
+      {/* ── 桌面侧栏 ── */}
+      <aside className="hidden w-52 shrink-0 flex-col border-r border-line bg-panel md:flex">
+        <Brand />
+        <NavList />
+        <StatusBlock ov={ov} />
       </aside>
+
+      {/* ── 手机抽屉导航 ── */}
+      <div className={`fixed inset-0 z-40 md:hidden ${navOpen ? '' : 'pointer-events-none'}`}>
+        <div
+          className={`drawer-backdrop absolute inset-0 bg-black/45 ${navOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setNavOpen(false)}
+          aria-hidden="true"
+        />
+        <aside
+          ref={panelRef}
+          id="mobile-nav"
+          role="dialog"
+          aria-modal="true"
+          aria-label="导航菜单"
+          onKeyDown={trapFocus}
+          className={`drawer-panel absolute inset-y-0 left-0 flex w-[80vw] max-w-[300px] flex-col border-r border-line bg-panel shadow-2xl ${navOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        >
+          <div className="flex items-start justify-between" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+            <Brand />
+            <button
+              ref={closeBtnRef}
+              onClick={() => setNavOpen(false)}
+              aria-label="关闭导航"
+              className="mr-2 mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-txt2 active:bg-panel2"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <NavList drawer onNavigate={() => setNavOpen(false)} />
+          <StatusBlock ov={ov} />
+        </aside>
+      </div>
 
       {/* ── 主区 ── */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* 顶栏状态条:整条可拖动窗口(H2),交互控件 no-drag */}
+        {/* 手机顶栏:菜单 + 当前页名 + 状态点 + 主题 */}
+        <header
+          className="flex shrink-0 items-center gap-1 border-b border-line bg-panel/80 px-1.5 backdrop-blur md:hidden"
+          style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}
+        >
+          <button
+            ref={menuBtnRef}
+            onClick={() => setNavOpen(true)}
+            aria-label="打开导航"
+            aria-expanded={navOpen}
+            aria-controls="mobile-nav"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-txt2 transition-colors active:bg-panel2"
+          >
+            <Menu size={22} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-bold leading-tight text-txt">{meta.title}</div>
+            <div className="truncate text-[10px] leading-tight text-txt3">
+              {ov ? (ov.degraded ? '存储降级' : '运行中') : '连接中…'} · 在途 {ov?.inflight ?? 0}
+            </div>
+          </div>
+          <span className={`h-2 w-2 shrink-0 rounded-full ${ov ? (ov.degraded ? 'bg-warn' : 'bg-ok') : 'bg-txt3'}`} aria-hidden="true" />
+          <ThemeToggle />
+        </header>
+
+        {/* 桌面顶栏状态条:整条可拖动窗口(H2),交互控件 no-drag */}
         <header
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-          className="flex h-12 shrink-0 select-none items-center justify-end gap-4 border-b border-line bg-panel/60 px-5 text-xs text-txt2 backdrop-blur"
+          className="hidden h-12 shrink-0 select-none items-center justify-end gap-4 border-b border-line bg-panel/60 px-5 text-xs text-txt2 backdrop-blur md:flex"
         >
           <span className="flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full ${ov ? (ov.degraded ? 'bg-warn' : 'bg-ok') : 'bg-txt3'}`} />
@@ -228,12 +350,12 @@ export function AppShell() {
           </span>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto p-5">
-          <div className="mx-auto max-w-6xl">
+        <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 md:p-5">
+          <div className="mx-auto max-w-6xl pb-[env(safe-area-inset-bottom)]">
             {/* 页头:统一大标题 */}
-            <div className="mb-4 border-b border-line pb-3.5">
-              <h1 className="text-xl font-extrabold tracking-tight text-txt">{meta.title}</h1>
-              <p className="mt-0.5 text-[13px] text-txt2">{meta.desc}</p>
+            <div className="mb-3 border-b border-line pb-3 md:mb-4 md:pb-3.5">
+              <h1 className="text-lg font-extrabold tracking-tight text-txt md:text-xl">{meta.title}</h1>
+              <p className="mt-0.5 text-xs text-txt2 md:text-[13px]">{meta.desc}</p>
             </div>
             <KeepAliveOutlet />
           </div>

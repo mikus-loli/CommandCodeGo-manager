@@ -66,12 +66,12 @@ const ModelRow = memo(function ModelRow({ m, u }: {
   const used = !!u && u.requests > 0;
   return (
     <button onClick={() => copyId(m.id)} title="点击复制模型 id"
-      className={`group flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left transition-all duration-150 hover:border-accent/50 active:scale-[0.99] ${
+      className={`group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left transition-all duration-150 hover:border-accent/50 active:scale-[0.99] md:flex md:flex-wrap ${
         used ? 'border-line bg-panel2/50' : 'border-line/70 bg-transparent hover:bg-panel2/40'}`}>
-      {/* 名称 + id + 套餐 */}
-      <div className="min-w-0 flex-1 basis-52">
+      {/* 名称 + id + 套餐(手机:首行左侧) */}
+      <div className="min-w-0 md:flex-1 md:basis-52">
         <div className="flex items-center gap-1.5">
-          <span className={`truncate font-mono text-xs ${used ? 'text-txt' : 'text-txt2'}`}>{m.id}</span>
+          <span title={m.id} className={`truncate font-mono text-xs ${used ? 'text-txt' : 'text-txt2'}`}>{m.id}</span>
           {m.plan && (
             <span className={`shrink-0 rounded px-1 py-px text-[9px] ${m.plan === 'go' ? 'bg-accent-dim text-accent' : 'bg-line text-txt3'}`}>
               {PLAN_LABEL[m.plan] ?? m.plan}
@@ -80,8 +80,16 @@ const ModelRow = memo(function ModelRow({ m, u }: {
         </div>
         {cat?.bestFor && <div className="mt-0.5 truncate text-[10px] text-txt3">{cat.bestFor}</div>}
       </div>
+      {/* 参考成本(手机:首行右侧;桌面:order-last 收到最右) */}
+      <div className="tnum shrink-0 text-right text-sm font-semibold md:order-last md:w-16" title="参考成本 = 官方单价 × 本地 token 用量(估算,非账单)">
+        {cost != null && cost > 0
+          ? <span className={cost >= 1 ? 'text-rose' : 'text-violet'}>{fmtUsd(cost)}</span>
+          : <span className="text-txt3">—</span>}
+      </div>
+      {/* 价格 + 用量:手机合成一行(两端对齐),md 起用 contents 摊回同级 flex 项 */}
+      <div className="col-span-2 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 md:contents">
       {/* 单价($/1M in/out · cache read;上下文进 title,保证单价单行不断裂) */}
-      <div className="tnum basis-44 whitespace-nowrap text-[11px] text-txt3"
+      <div className="tnum whitespace-nowrap text-[11px] text-txt3 md:basis-44"
         title={cat ? `官方公开单价:$ / 1M tokens(输入 / 输出 / 缓存读)${cat.context ? ` · 上下文 ${cat.context}` : ''}${cat.cacheWrite ? ` · 缓存写 $${cat.cacheWrite}` : ''}` : undefined}>
         {cat ? (cat.priceIn === 0 && cat.priceOut === 0
           ? <span className="text-ok">免费</span>
@@ -89,16 +97,11 @@ const ModelRow = memo(function ModelRow({ m, u }: {
         : '价格未知'}
       </div>
       {/* 30 天本地用量 */}
-      <div className="tnum basis-40 whitespace-nowrap text-[11px] text-txt3" title="最近 30 天经本代理的用量">
+      <div className="tnum whitespace-nowrap text-[11px] text-txt3 md:basis-40" title="最近 30 天经本代理的用量">
         {used
           ? <>{fmtInt(u!.requests)} 次 · {fmtK(u!.input + u!.output)} tok</>
           : <span className="text-txt3/70">近 {USAGE_DAYS} 天未使用</span>}
       </div>
-      {/* 参考成本 */}
-      <div className="tnum w-16 shrink-0 text-right text-sm font-semibold" title="参考成本 = 官方单价 × 本地 token 用量(估算,非账单)">
-        {cost != null && cost > 0
-          ? <span className={cost >= 1 ? 'text-rose' : 'text-violet'}>{fmtUsd(cost)}</span>
-          : <span className="text-txt3">—</span>}
       </div>
     </button>
   );
@@ -229,9 +232,9 @@ export function Models() {
   const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(groups.map(g => g.vendor)));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       {/* ── 30 天花销汇总 ── */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <StatCard label={`近 ${USAGE_DAYS} 天参考成本`} value={fmtUsd(totals.cost)} unit="估算"
           sub="官方单价 × 本地用量" icon={<Coins size={18} />} tone="violet" />
         <StatCard label={`近 ${USAGE_DAYS} 天请求`} value={fmtInt(totals.requests)}
@@ -244,8 +247,8 @@ export function Models() {
       </div>
 
       {/* ── 顶部:搜索 / 视图 / 刷新 ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full max-w-xs">
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <div className="relative w-full sm:max-w-xs">
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-txt3" />
           <Input className="pl-8" value={query} onChange={e => setQuery(e.target.value)} placeholder="搜索模型 id…" />
         </div>
@@ -263,7 +266,7 @@ export function Models() {
           </Button>
         )}
         {models && (
-          <span className="tnum ml-auto text-xs text-txt3">
+          <span className="tnum w-full text-[11px] text-txt3 sm:ml-auto sm:w-auto sm:text-xs">
             {query.trim() || view === 'used' ? `匹配 ${matched} / ${models.length} 个模型` : `共 ${fmtInt(models.length)} 个模型 · ${groups.length} 个厂商`}
           </span>
         )}
@@ -288,11 +291,11 @@ export function Models() {
               <Card key={g.vendor} className={`overflow-hidden transition-all duration-200 ${open ? 'border-accent/30' : ''}`}>
                 {/* 厂商头:整条可点,展开/收起有旋转箭头与底色反馈;折叠时组头直接给该组参考成本 */}
                 <button onClick={() => toggleGroup(g.vendor)}
-                  className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all duration-150 active:scale-[0.995] ${
+                  className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-all duration-150 active:scale-[0.995] md:gap-3 md:px-4 md:py-3 ${
                     open ? 'border-b border-line bg-panel2/40' : 'hover:bg-panel2/60'}`}>
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate text-sm font-semibold text-txt">{g.vendor}</span>
-                    <Badge kind="accent">{g.items.length} 个模型</Badge>
+                    <Badge kind="accent">{g.items.length} 个<span className="hidden md:inline">模型</span></Badge>
                     {g.cost > 0 && (
                       <span className="tnum shrink-0 rounded border border-violet/25 bg-violet/10 px-1.5 py-0.5 text-[11px] font-semibold text-violet"
                         title="该组近 30 天参考成本合计">
@@ -305,7 +308,7 @@ export function Models() {
                 {/* 高度动画折叠(grid-template-rows 0fr→1fr),内层 min-h-0 + overflow-hidden 才能真正收干 */}
                 <div className={`grid transition-all duration-300 ease-in-out ${open ? '[grid-template-rows:1fr]' : '[grid-template-rows:0fr]'}`}>
                   <div className="min-h-0 overflow-hidden">
-                    <div className="space-y-1.5 p-4">
+                    <div className="space-y-1.5 p-2.5 md:p-4">
                       {g.items.map(m => <ModelRow key={m.id} m={m} u={usage.get(m.id)} />)}
                     </div>
                   </div>

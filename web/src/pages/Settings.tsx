@@ -38,7 +38,7 @@ function ToggleRow({ title, hint, on, onChange }: {
   title: string; hint?: string; on: boolean; onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-1.5">
+    <div className="flex items-center justify-between gap-3 py-2 md:gap-4 md:py-1.5">
       <div className="min-w-0">
         <div className="text-sm text-txt">{title}</div>
         {hint && <div className="mt-0.5 text-xs text-txt3">{hint}</div>}
@@ -167,20 +167,20 @@ export function Settings() {
     errors[k] ? <div className="mt-1 text-xs text-err">{errors[k]}</div> : null;
 
   return (
-    <div className="space-y-5">
-      {/* ── 顶部操作条 ── */}
-      <div className="flex items-center gap-3">
+    <div className="space-y-4 md:space-y-5">
+      {/* ── 顶部操作条(手机上保存按钮独占一行、全宽,拇指可达)── */}
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
         {hasErrors && <span className="text-xs text-err">部分配置不合法,修正后才能保存</span>}
-        <div className="ml-auto">
-          <Button variant="primary" loading={saving} disabled={hasErrors} onClick={() => void save()}>保存</Button>
+        <div className="w-full sm:ml-auto sm:w-auto">
+          <Button className="w-full sm:w-auto" variant="primary" loading={saving} disabled={hasErrors} onClick={() => void save()}>保存</Button>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 md:gap-4 lg:grid-cols-2">
         {/* ── 服务 ── */}
         <Card>
           <CardHeader title="服务" extra={<span className="text-xs text-txt3">重启后生效</span>} />
-          <CardBody className="grid gap-4 p-4 sm:grid-cols-2">
+          <CardBody className="grid gap-3 p-3 sm:grid-cols-2 sm:gap-4 md:p-4">
             <Field label="端口"
               hint={pinned.has('port') ? '由环境变量 PORT 固定(容器部署);对外端口改 docker-compose.yml 的 ports' : undefined}>
               <Input type="number" inputMode="numeric" value={form.port}
@@ -202,8 +202,8 @@ export function Settings() {
         {/* ── 上游 ── */}
         <Card>
           <CardHeader title="上游" extra={<span className="text-xs text-txt3">重启后生效</span>} />
-          <CardBody className="space-y-1 p-4">
-            <div className="grid gap-4 pb-2 sm:grid-cols-2">
+          <CardBody className="space-y-1 p-3 md:p-4">
+            <div className="grid gap-3 pb-2 sm:grid-cols-2 sm:gap-4">
               <Field label="API Base">
                 <Input value={form.apiBase} onChange={e => set('apiBase', e.target.value)}
                   placeholder="https://api.commandcode.ai" className="tnum text-xs" />
@@ -233,7 +233,7 @@ export function Settings() {
         {/* ── 日志与保留 ── */}
         <Card>
           <CardHeader title="日志与保留" extra={<span className="text-xs text-txt3">重启后生效</span>} />
-          <CardBody className="grid gap-4 p-4 sm:grid-cols-2">
+          <CardBody className="grid gap-3 p-3 sm:grid-cols-2 sm:gap-4 md:p-4">
             <Field label="日志级别">
               <Select value={form.logLevel} onChange={e => set('logLevel', e.target.value)}>
                 {LOG_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
@@ -254,7 +254,7 @@ export function Settings() {
         {/* ── 安全 ── */}
         <Card>
           <CardHeader title="安全" extra={<span className="text-xs text-txt3">重启后生效</span>} />
-          <CardBody className="p-4">
+          <CardBody className="p-3 md:p-4">
             <ToggleRow title="允许 user_* 上游密钥直通" hint="关闭后 user_* 直通失效,只认客户端密钥(sk-ccp-*)"
               on={form.allowDirectUpstreamKey} onChange={v => set('allowDirectUpstreamKey', v)} />
           </CardBody>
@@ -263,7 +263,7 @@ export function Settings() {
         {/* ── 运行环境信息(只读) ── */}
         <Card>
           <CardHeader title="运行环境信息" extra={<span className="text-xs text-txt3">只读</span>} />
-          <CardBody className="p-4">
+          <CardBody className="p-3 md:p-4">
             <KV label="数据目录"><span className="tnum break-all text-xs">{info.dataDir ?? '—'}</span></KV>
             <div className="pt-2.5">
               <div className="mb-1.5 text-xs text-txt2">环境变量旋钮(需以环境变量设置后重启生效,不写入配置文件)</div>

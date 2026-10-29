@@ -4,7 +4,7 @@ import { Activity, Coins, Database, Zap } from 'lucide-react';
 import { fetchUsage, type UsageRow } from '../api';
 import {
   Card, CardBody, CardHeader, EChart, echartsBase, EmptyState, Loading, vgrad,
-  StatCard, Table, Tabs, Td, Th, toast, themeColor, useTheme, fmtInt, fmtK,
+  StatCard, Table, Tabs, Td, Th, toast, themeColor, useTheme, useNarrow, fmtInt, fmtK,
 } from '../ui';
 
 // ── 工具 ──────────────────────────────────────────────────
@@ -99,6 +99,7 @@ export function Usage() {
 
   // ── 主图:每日 请求数(柱)+ 输入/输出 tokens(线),缺数据的天补 0;配色随主题 ──
   const [theme] = useTheme();
+  const narrow = useNarrow();
   const dayOption = useMemo(() => {
     if (!dayRows) return null;
     const C = {
@@ -107,7 +108,7 @@ export function Usage() {
       txt2: themeColor('--color-txt2'), ok: themeColor('--color-ok'),
       txt3: themeColor('--color-txt3'), line: themeColor('--color-line'), line2: themeColor('--color-line2'),
     };
-    const base = echartsBase();
+    const base = echartsBase(narrow);
     const byDay = new Map<string, UsageRow>();
     for (const r of dayRows) if (r.day) byDay.set(r.day, r);
     const labels: string[] = [], reqs: number[] = [], ins: number[] = [], outs: number[] = [];
@@ -123,8 +124,9 @@ export function Usage() {
     }
     return {
       ...base,
-      grid: { ...base.grid, top: 56, right: 64 },
-      legend: { data: ['请求数', '输入 tokens', '输出 tokens'], top: 4, right: 8, itemWidth: 14, textStyle: { color: C.txt2, fontSize: 12 } },
+      // 手机上省掉右轴刻度,把宽度让给绘图区(tokens 走 tooltip)
+      grid: { ...base.grid, top: narrow ? 52 : 56, right: narrow ? 10 : 64 },
+      legend: { data: ['请求数', '输入 tokens', '输出 tokens'], top: 4, right: narrow ? 4 : 8, itemWidth: narrow ? 10 : 14, itemGap: narrow ? 8 : 10, textStyle: { color: C.txt2, fontSize: narrow ? 10 : 12 } },
       xAxis: {
         type: 'category', data: labels,
         axisLine: { lineStyle: { color: C.line2 } }, axisTick: { show: false },
@@ -137,7 +139,7 @@ export function Usage() {
         },
         {
           type: 'value',
-          axisLabel: { color: C.txt2, fontSize: 11 }, splitLine: { show: false },
+          axisLabel: { show: !narrow, color: C.txt2, fontSize: 11 }, splitLine: { show: false },
         },
       ],
       series: [
@@ -157,7 +159,7 @@ export function Usage() {
         },
       ],
     };
-  }, [dayRows, from, to, theme]);
+  }, [dayRows, from, to, theme, narrow]);
 
   // ── 次图:模型维度 输入/缓存/输出 三段堆叠横向条形图(按总量取 Top 10) ──
   const modelOption = useMemo(() => {
@@ -167,12 +169,13 @@ export function Usage() {
       violet: themeColor('--color-violet'), warn: themeColor('--color-warn'), ok: themeColor('--color-ok'),
       txt2: themeColor('--color-txt2'), line: themeColor('--color-line'), line2: themeColor('--color-line2'),
     };
-    const base = echartsBase();
+    const base = echartsBase(narrow);
     const top = [...modelRows].sort((a, b) => totalTokens(b) - totalTokens(a)).slice(0, 10);
     return {
       ...base,
-      grid: { ...base.grid, top: 52, left: 150 },
-      legend: { data: ['输入', '缓存', '输出'], top: 4, right: 8, itemWidth: 14, textStyle: { color: C.txt2, fontSize: 12 } },
+      // 窄屏把左侧模型名列从 150px 收到 96px,并截断超长模型名
+      grid: { ...base.grid, top: narrow ? 46 : 52, left: narrow ? 96 : 150 },
+      legend: { data: ['输入', '缓存', '输出'], top: 4, right: narrow ? 4 : 8, itemWidth: narrow ? 10 : 14, itemGap: narrow ? 8 : 10, textStyle: { color: C.txt2, fontSize: narrow ? 10 : 12 } },
       xAxis: {
         type: 'value',
         axisLabel: { color: C.txt2, fontSize: 11 }, splitLine: { lineStyle: { color: C.line } },
@@ -180,7 +183,7 @@ export function Usage() {
       yAxis: {
         type: 'category', inverse: true, data: top.map(r => r.model ?? 'unknown'),
         axisLine: { lineStyle: { color: C.line2 } }, axisTick: { show: false },
-        axisLabel: { color: C.txt2, fontSize: 11 },
+        axisLabel: { color: C.txt2, fontSize: narrow ? 10 : 11, width: narrow ? 84 : 140, overflow: 'truncate' },
       },
       series: [
         { name: '输入', type: 'bar', stack: 'tokens', data: top.map(r => r.input_tokens ?? 0), itemStyle: { color: C.accent }, barMaxWidth: 14 },
@@ -188,7 +191,7 @@ export function Usage() {
         { name: '输出', type: 'bar', stack: 'tokens', data: top.map(r => r.output_tokens ?? 0), itemStyle: { color: C.brand2 } },
       ],
     };
-  }, [modelRows, theme]);
+  }, [modelRows, theme, narrow]);
 
   // ── 范围内汇总(模型/天维度任一可用即可求和) ──
   const stats = useMemo(() => {
@@ -230,9 +233,9 @@ export function Usage() {
     : <EmptyState title="暂无用量数据" hint="该时间范围内没有任何代理请求记录。" />;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       {/* ── 范围内汇总 ── */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <StatCard label="总请求" value={statsLoading ? '…' : fmtInt(stats.requests)} icon={<Activity size={18} />} />
         <StatCard label="输入 Tokens" value={statsLoading ? '…' : fmtK(stats.input)} icon={<Coins size={18} />} />
         <StatCard label="输出 Tokens" value={statsLoading ? '…' : fmtK(stats.output)} icon={<Zap size={18} />} />
@@ -244,32 +247,32 @@ export function Usage() {
         <CardHeader
           title="每日请求与 Tokens"
           extra={
-            <div className="flex items-center gap-3">
+            <div className="flex w-full max-w-full items-center gap-3 sm:w-auto">
               <span className="tnum hidden text-xs text-txt3 sm:inline">{from} ~ {to}</span>
               <Tabs items={RANGE_TABS} value={range} onChange={setRange} />
             </div>
           } />
-        <CardBody>
+        <CardBody className="p-3 md:p-4">
           {dayRows === null ? (
             <Loading>加载用量数据…</Loading>
           ) : dayRows.length === 0 ? (
             emptyOrFailed(!!failMsg)
           ) : (
-            dayOption && <EChart option={dayOption} className="h-72" />
+            dayOption && <EChart option={dayOption} className="h-56 sm:h-72" />
           )}
         </CardBody>
       </Card>
 
       {/* ── 次图:模型 token 构成 ── */}
       <Card>
-        <CardHeader title="模型 Token 构成" extra={<span className="text-xs text-txt3">按总 tokens 取 Top 10 · 输入 / 缓存 / 输出</span>} />
-        <CardBody>
+        <CardHeader title="模型 Token 构成" extra={<span className="text-[11px] text-txt3 md:text-xs">按总 tokens 取 Top 10<span className="hidden sm:inline"> · 输入 / 缓存 / 输出</span></span>} />
+        <CardBody className="p-3 md:p-4">
           {modelRows === null ? (
             <Loading>加载模型维度数据…</Loading>
           ) : modelRows.length === 0 ? (
             emptyOrFailed(!!failMsg)
           ) : (
-            modelOption && <EChart option={modelOption} className="h-80" />
+            modelOption && <EChart option={modelOption} className="h-64 sm:h-80" />
           )}
         </CardBody>
       </Card>
@@ -290,19 +293,19 @@ export function Usage() {
                 <SortTh label={tab === 'model' ? '模型' : 'Key'} k="dim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortTh label="请求数" k="requests" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
                 <SortTh label="输入 tokens" k="input_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
-                <SortTh label="缓存 tokens" k="cached_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
-                <SortTh label="输出 tokens" k="output_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                <SortTh label="缓存 tokens" k="cached_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden text-right md:table-cell" />
+                <SortTh label="输出 tokens" k="output_tokens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden text-right md:table-cell" />
                 <SortTh label="合计 tokens" k="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
               </tr>
             </thead>
             <tbody>
               {sortedRows.map(({ r, dim, total }) => (
                 <tr key={`${dim}-${r.key_id ?? ''}`} className="transition-colors hover:bg-panel2/60">
-                  <Td className="max-w-64 truncate font-mono text-xs">{dim}</Td>
+                  <Td className="max-w-40 truncate font-mono text-xs md:max-w-64">{dim}</Td>
                   <Td className="tnum text-right text-xs">{fmtInt(r.requests)}</Td>
                   <Td className="tnum text-right text-xs">{fmtInt(r.input_tokens)}</Td>
-                  <Td className="tnum text-right text-xs">{fmtInt(r.cached_tokens)}</Td>
-                  <Td className="tnum text-right text-xs">{fmtInt(r.output_tokens)}</Td>
+                  <Td className="hidden tnum text-right text-xs md:table-cell">{fmtInt(r.cached_tokens)}</Td>
+                  <Td className="hidden tnum text-right text-xs md:table-cell">{fmtInt(r.output_tokens)}</Td>
                   <Td className="tnum text-right text-xs font-medium text-txt">{fmtInt(total)}</Td>
                 </tr>
               ))}

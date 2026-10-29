@@ -4,7 +4,7 @@ import { Activity, AlertTriangle, Coins, KeyRound, Radio, Timer } from 'lucide-r
 import { fetchLogs, fetchOverview, tokenQuery, type Overview, type RequestRow } from '../api';
 import {
   Badge, Card, CardBody, CardHeader, EChart, echartsBase, EmptyState, Loading, Pagination, vgrad,
-  Skeleton, StatCard, Table, Td, Th, themeColor, useTheme, fmtInt, fmtK, fmtMs, fmtTime,
+  Skeleton, StatCard, Table, Td, Th, themeColor, useTheme, useNarrow, fmtInt, fmtK, fmtMs, fmtTime, fmtTimeShort,
 } from '../ui';
 
 // 运行时长人性化(与 AppShell 口径一致)
@@ -83,6 +83,7 @@ export function Dashboard() {
 
   // 24h 双轴图:左轴请求数(柱,accent),右轴 tokens(线,txt2);配色随主题
   const [theme] = useTheme();
+  const narrow = useNarrow();
   const chartOption = useMemo(() => {
     if (!ov) return null;
     const C = {
@@ -91,13 +92,14 @@ export function Dashboard() {
       txt2: themeColor('--color-txt2'), txt3: themeColor('--color-txt3'),
       line: themeColor('--color-line'), line2: themeColor('--color-line2'),
     };
-    const base = echartsBase();
+    const base = echartsBase(narrow);
     const buckets = ov.last24h.buckets;
     return {
       ...base,
-      grid: { ...base.grid, top: 56, right: 56 },
+      // 手机上牺牲右轴刻度换绘图宽度(tokens 仍可从 tooltip 读到)
+      grid: { ...base.grid, top: narrow ? 52 : 56, right: narrow ? 10 : 56 },
       tooltip: { ...base.tooltip, axisPointer: { type: 'cross', label: { backgroundColor: C.line2 } } },
-      legend: { data: ['请求数', 'tokens'], top: 4, right: 8, itemWidth: 14, textStyle: { color: C.txt2, fontSize: 12 } },
+      legend: { data: ['请求数', 'tokens'], top: 4, right: narrow ? 4 : 8, itemWidth: narrow ? 10 : 14, itemGap: narrow ? 8 : 10, textStyle: { color: C.txt2, fontSize: narrow ? 10 : 12 } },
       xAxis: {
         type: 'category',
         data: buckets.map(b => new Date(b.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
@@ -113,7 +115,7 @@ export function Dashboard() {
         },
         {
           type: 'value',
-          axisLabel: { color: C.txt2, fontSize: 11 },
+          axisLabel: { show: !narrow, color: C.txt2, fontSize: 11 },
           splitLine: { show: false },
         },
       ],
@@ -134,16 +136,16 @@ export function Dashboard() {
         },
       ],
     };
-  }, [ov, theme]);
+  }, [ov, theme, narrow]);
 
   const today = ov?.today;
   const todayTokens = (today?.inputTokens ?? 0) + (today?.outputTokens ?? 0);
   const errRate = today && today.requests > 0 ? (today.errors / today.requests) * 100 : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       {/* ── 统计卡网格 ── */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 2xl:grid-cols-6">
         {ov ? (
           <>
             <StatCard label="今日请求" value={fmtInt(today?.requests)} tone="brand" icon={<Activity size={19} />} />
@@ -157,8 +159,8 @@ export function Dashboard() {
           </>
         ) : (
           Array.from({ length: 6 }, (_, i) => (
-            <Card key={i} className="flex items-center gap-3.5 px-4 py-3.5">
-              <Skeleton className="h-10 w-10 rounded-lg" />
+            <Card key={i} className="flex items-center gap-2.5 px-3 py-3 md:gap-3.5 md:px-4 md:py-3.5">
+              <Skeleton className="h-8 w-8 rounded-lg md:h-10 md:w-10" />
               <div className="min-w-0 flex-1">
                 <Skeleton className="mb-2 h-3 w-16" />
                 <Skeleton className="h-5 w-20" />
@@ -170,8 +172,8 @@ export function Dashboard() {
 
       {/* ── 24 小时请求与 Tokens ── */}
       <Card>
-        <CardHeader title="24 小时请求与 Tokens" extra={<span className="text-xs text-txt3">过去 24 小时 · 请求完成后自动更新</span>} />
-        <CardBody className="p-4">
+        <CardHeader title="24 小时请求与 Tokens" extra={<span className="text-[11px] text-txt3 md:text-xs">过去 24 小时<span className="hidden sm:inline"> · 请求完成后自动更新</span></span>} />
+        <CardBody className="p-3 md:p-4">
           {overviewFailed ? (
             <EmptyState title="图表数据加载失败" hint="正在自动重试,请确认代理服务可达。" />
           ) : !ov ? (
@@ -179,7 +181,7 @@ export function Dashboard() {
           ) : !ov.last24h.buckets.some(b => b.requests > 0) ? (
             <EmptyState title="过去 24 小时暂无请求" hint="代理请求完成后,这里会自动展示请求量与 token 消耗。" />
           ) : (
-            chartOption && <EChart option={chartOption} className="h-72" />
+            chartOption && <EChart option={chartOption} className="h-56 sm:h-72" />
           )}
         </CardBody>
       </Card>
@@ -201,18 +203,21 @@ export function Dashboard() {
               <Table>
                 <thead>
                   <tr>
-                    <Th>时间</Th><Th>端点</Th><Th>模型</Th><Th>账号</Th><Th>状态</Th><Th>耗时</Th><Th className="text-right">tokens</Th>
+                    <Th>时间</Th><Th>端点</Th><Th>模型</Th><Th className="hidden md:table-cell">账号</Th><Th>状态</Th><Th className="hidden md:table-cell">耗时</Th><Th className="text-right">tokens</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(r => (
                     <tr key={r.id} className="transition-colors hover:bg-panel2/60">
-                      <Td className="tnum whitespace-nowrap text-xs text-txt2">{fmtTime(r.ts)}</Td>
+                      <Td className="tnum whitespace-nowrap text-xs text-txt2">
+                        <span className="hidden md:inline">{fmtTime(r.ts)}</span>
+                        <span className="md:hidden">{fmtTimeShort(r.ts)}</span>
+                      </Td>
                       <Td className="font-mono text-xs">{r.endpoint || '—'}</Td>
                       <Td className="max-w-36 truncate text-xs">{r.model ?? '—'}</Td>
-                      <Td className="max-w-32 truncate text-xs text-txt2">{r.upstream_name ?? (r.upstream_key_id != null ? `#${r.upstream_key_id}` : '—')}</Td>
+                      <Td className="hidden max-w-32 truncate text-xs text-txt2 md:table-cell">{r.upstream_name ?? (r.upstream_key_id != null ? `#${r.upstream_key_id}` : '—')}</Td>
                       <Td className="whitespace-nowrap"><StatusBadge code={r.status_code} /></Td>
-                      <Td className="tnum text-xs">{fmtMs(r.duration_ms)}</Td>
+                      <Td className="hidden tnum text-xs md:table-cell">{fmtMs(r.duration_ms)}</Td>
                       <Td className="tnum text-right text-xs">{fmtK((r.input_tokens ?? 0) + (r.output_tokens ?? 0))}</Td>
                     </tr>
                   ))}
@@ -225,7 +230,7 @@ export function Dashboard() {
 
         <Card>
           <CardHeader title="服务状态" extra={<span className="tnum text-xs text-txt3">v{ov?.version ?? '…'}</span>} />
-          <CardBody className="p-4">
+          <CardBody className="p-3 md:p-4">
             {!ov ? (
               <Loading />
             ) : (
