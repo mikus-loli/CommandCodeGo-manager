@@ -3,6 +3,8 @@
 //   402(payment required)        —— 信用耗尽:持久标记,落库 status='exhausted';
 //   429 + USAGE_EXCEEDED/window  —— 5 小时滚动 / 周窗口到顶:运行时标记到 resetAt
 //                                   (见 window-state.mjs),窗口重置后自动恢复。
+//   429 + 月度信用 <1%           —— 上游把月额度耗尽也报成 429:持久标记 exhausted,
+//                                   额度恢复到 >=5% 后由用量刷新自动重新启用。
 // 其余 429 是瞬态限速,**不**轮转(换 key=换设备指纹,只在确属耗尽时才值得);
 // 每把密钥独立设备指纹/会话的既有设计保证了轮转后的形态自洽。
 // 已入库的直通 user_* 与 config 兜底同样参与轮转,未入库凭据保持直通。
@@ -11,7 +13,7 @@ import { forwardToCC } from './upstream.mjs';
 import { resolveUpstreamKey } from '../auth.mjs';
 import { setUpstreamKeyStatus, findUpstreamKeyByApiKey, listUpstreamKeys } from '../store/keys.mjs';
 import { classifyExhaustion, markWindowBlocked } from './window-state.mjs';
-import { refreshAccountUsage } from './account-usage.mjs';
+import { refreshAccountUsage, accountCreditFraction, markLowCreditExhausted, LOW_CREDIT_FRACTION } from './account-usage.mjs';
 import { log } from '../log.mjs';
 
 /**
@@ -52,13 +54,25 @@ export async function forwardWithRotation(auth, headers, ccBody, signal, promptC
       log('warn', 'Upstream key exhausted (402)', { upstreamKeyId: keyId });
       await setUpstreamKeyStatus(keyId, 'exhausted');
     } else {
-      // 窗口到顶:运行时标记到 resetAt;面板侧延迟几秒拉一次该账户,inflight 去重
-      markWindowBlocked(keyId, { source: 'live', window: ex.kind, until: ex.until });
-      log('warn', 'Upstream window limit hit', {
-        upstreamKeyId: keyId, window: ex.kind, until: new Date(ex.until).toISOString(),
-      });
-      const t = setTimeout(() => { refreshAccountUsage(keyId).catch(() => {}); }, 3000);
-      t.unref?.();
+      // 月度信用只剩零头时,上游常把「额度用完」报成 429 USAGE_EXCEEDED 而不是 402。
+      // 只做 10 分钟窗口冷却的话,到期后同一账号又会被选中、再撞一次再轮转 —— 每笔请求
+      // 都白跑一个来回。这种情况直接持久停用(exhausted),额度恢复后由用量刷新自动启用。
+      const creditFrac = accountCreditFraction(keyId);
+      if (creditFrac != null && creditFrac < LOW_CREDIT_FRACTION) {
+        log('warn', 'Upstream key exhausted (low credit)', {
+          upstreamKeyId: keyId, creditFraction: Number(creditFrac.toFixed(4)), window: ex.kind,
+        });
+        await setUpstreamKeyStatus(keyId, 'exhausted');
+        await markLowCreditExhausted(keyId);
+      } else {
+        // 窗口到顶:运行时标记到 resetAt;面板侧延迟几秒拉一次该账户,inflight 去重
+        markWindowBlocked(keyId, { source: 'live', window: ex.kind, until: ex.until });
+        log('warn', 'Upstream window limit hit', {
+          upstreamKeyId: keyId, window: ex.kind, until: new Date(ex.until).toISOString(),
+        });
+        const t = setTimeout(() => { refreshAccountUsage(keyId).catch(() => {}); }, 3000);
+        t.unref?.();
+      }
     }
 
     if (attempt + 1 >= maxAttempts) {

@@ -10,7 +10,8 @@ import { CFG } from '../config.mjs';
 import { log } from '../log.mjs';
 import { CC_VERSION } from './upstream.mjs';
 import { slugifyProjectPath, DEVICE_PROFILE } from './fingerprint.mjs';
-import { listUpstreamKeys, getUpstreamKeyById, renameUpstreamKey, getPinnedUpstreamKeyId, setPinnedUpstreamKeyId } from '../store/keys.mjs';
+import { listUpstreamKeys, getUpstreamKeyById, getUpstreamKeyByIdAny, renameUpstreamKey, getPinnedUpstreamKeyId, setPinnedUpstreamKeyId, setUpstreamKeyStatus } from '../store/keys.mjs';
+import { getSetting, setSetting } from '../store/settings.mjs';
 import { syncFromWindowLimits, getWindowState } from './window-state.mjs';
 
 // 账户展示名:commandcode 账户名(userName)优先,退回邮箱前缀,再退回通用默认。
@@ -34,6 +35,45 @@ const PLAN_DISPLAY = {
   'individual-go': 'Go', 'individual-goat': 'GOAT', 'individual-pro': 'Pro', 'individual-pro-v1': 'Pro',
   'individual-provider': 'Provider', 'individual-max': 'Max', 'individual-ultra': 'Ultra', 'teams-pro': 'Teams Pro',
 };
+
+// ── 低额度持久耗尽 ─────────────────────────────────────────
+// 上游把「额度用完」报成 429 USAGE_EXCEEDED 时,CCP 只做临时窗口冷却(默认 10 分钟),
+// 到期后同一账号又回到候选、再次撞墙再轮转 —— 月额度只剩零头时这就是每次请求的常态。
+// 规则:429 耗尽 + 月度信用剩余 <1% → 持久标记 exhausted(落库,停用语义);
+// 只有这条路径标记的账号会在后续用量刷新恢复到 >=5% 时自动重新启用,
+// 手动停用(disabled)与 402 信用耗尽都不参与自动恢复,避免账号状态来回抖。
+export const LOW_CREDIT_FRACTION = 0.01;
+export const CREDIT_RECOVERY_FRACTION = 0.05;
+const LOW_CREDIT_MARKED_KEY = 'credit_low_exhausted_ids';
+
+function fractionOfCredits(data) {
+  const credits = data?.credits;
+  const total = Number(credits?.monthlyTotal);
+  if (!credits || !Number.isFinite(total) || total <= 0) return null;
+  // 用「月度 + 购买 + 赠送」的总余额:有购买额度时账号仍可用,不能误判为耗尽
+  const remaining = Number(credits.totalRemaining) || Number(credits.monthly) || 0;
+  return Math.max(0, remaining) / total;
+}
+
+async function lowCreditMarkedIds() {
+  try {
+    const parsed = JSON.parse((await getSetting(LOW_CREDIT_MARKED_KEY)) ?? '[]');
+    return new Set(Array.isArray(parsed) ? parsed.map(Number).filter(Number.isInteger) : []);
+  } catch { return new Set(); }
+}
+
+/** 记录「因低额度被持久停用」的账号,供额度恢复后自动启用。 */
+export async function markLowCreditExhausted(keyId) {
+  const ids = await lowCreditMarkedIds();
+  ids.add(keyId);
+  await setSetting(LOW_CREDIT_MARKED_KEY, JSON.stringify([...ids]));
+}
+
+async function unmarkLowCreditExhausted(keyId) {
+  const ids = await lowCreditMarkedIds();
+  if (!ids.delete(keyId)) return;
+  await setSetting(LOW_CREDIT_MARKED_KEY, JSON.stringify([...ids]));
+}
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
@@ -143,6 +183,11 @@ async function fetchAccountUsage(apiKey) {
 // ── 缓存与刷新编排 ─────────────────────────────────────────
 // id → { data, error, fetchedAt }。进程内缓存,重启即空,靠手动刷新回填。
 const cache = new Map();
+/** 某账号最近快照的月度信用剩余比例(0~1);无快照/未知套餐总额返回 null。 */
+export function accountCreditFraction(keyId) {
+  return fractionOfCredits(cache.get(keyId)?.data ?? null);
+}
+
 // 进行中的刷新去重:同一账号并发点刷新只发一串上游请求
 const inflight = new Map();
 
@@ -190,6 +235,22 @@ async function refreshKey(key) {
         }
       }
     }
+    // 低额度持久停用的账号:额度恢复到 >=5% 后自动重新启用。只有这条标记集里的
+    // 账号会被恢复,手动 disabled 与 402 信用耗尽的账号保持原状。
+    if (out.status === 'exhausted' && entry.data) {
+      const marks = await lowCreditMarkedIds();
+      if (marks.has(out.id)) {
+        const frac = fractionOfCredits(entry.data);
+        if (frac != null && frac >= CREDIT_RECOVERY_FRACTION) {
+          await setUpstreamKeyStatus(out.id, 'active');
+          await unmarkLowCreditExhausted(out.id);
+          log('info', 'Upstream key reactivated after credit recovery', {
+            upstreamKeyId: out.id, creditFraction: Number(frac.toFixed(4)),
+          });
+          out = { ...out, status: 'active' };
+        }
+      }
+    }
     return { key: out, entry };
   })();
   inflight.set(key.id, p);
@@ -219,14 +280,18 @@ export async function refreshAccountUsage(id) {
       failed: entry.data ? 0 : 1,
     };
   }
-  const actives = (await listUpstreamKeys()).filter(k => k.status === 'active');
+  // 活跃账号 + 「因低额度被持久停用」的账号:后者也要定期刷新,否则月额度恢复后
+  // 永远不会自动重新启用。手动 disabled 的账号不进这里(不替用户做决定)。
+  const marked = await lowCreditMarkedIds();
+  const actives = (await listUpstreamKeys())
+    .filter(k => k.status === 'active' || (k.status === 'exhausted' && marked.has(k.id)));
   const rows = [];
   let refreshed = 0, failed = 0;
   const CONCURRENCY = 3;
   for (let i = 0; i < actives.length; i += CONCURRENCY) {
     const batch = actives.slice(i, i + CONCURRENCY);
     const results = await Promise.all(batch.map(async k => {
-      const full = await getUpstreamKeyById(k.id);
+      const full = k.status === 'active' ? await getUpstreamKeyById(k.id) : await getUpstreamKeyByIdAny(k.id);
       return full ? refreshKey(full) : null;
     }));
     batch.forEach((k, j) => {

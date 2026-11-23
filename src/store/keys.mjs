@@ -46,6 +46,17 @@ export async function getUpstreamKeyById(id) {
   return k && k.status === 'active' ? k : null;
 }
 
+/**
+ * 内部使用(用量刷新/低额度恢复):按 id 取明文 key,**不过滤 status**。
+ * 只给「需要刷新已停用账号以判断额度是否恢复」的路径用;鉴权/选路仍走
+ * getUpstreamKeyById,停用账号不参与转发。
+ */
+export async function getUpstreamKeyByIdAny(id) {
+  const db = getDb();
+  if (!db) return memoryFallback.upstreamKeys.get(id) ?? null;
+  return db.prepare('SELECT * FROM upstream_keys WHERE id = ?').get(id) ?? null;
+}
+
 /** 按 API key 明文查重(CLI 凭证导入时避免重复建同名记录)。返回行或 null。 */
 export async function findUpstreamKeyByApiKey(apiKey) {
   const db = getDb();
